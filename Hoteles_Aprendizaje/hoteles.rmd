@@ -1,0 +1,108 @@
+---
+title: "Hoteles Kaggle"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# set.seed(823)
+
+library(tidyverse)
+library(tidymodels)
+library(rsample)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Proyecto Aprendizaje de Máquina - Hoteles Kaggle
+
+```{r}
+sample_submission = read.csv("Datos/sample_submission.csv")
+```
+
+
+Proyecto
+
+
+```{r}
+hoteles = read.csv("Datos/entrena.csv") |>
+  mutate(hotel = factor(hotel),
+         arrival_date_month = factor(arrival_date_month),
+         meal = factor(meal),
+         country = factor(country),
+         market_segment = factor(market_segment),
+         distribution_channel = factor(distribution_channel),
+         reserved_room_type = factor(reserved_room_type),
+         assigned_room_type = factor(assigned_room_type),
+         deposit_type = factor(deposit_type),
+         agent = factor(agent),
+         company = factor(company),
+         customer_type = factor(customer_type),
+         )
+
+### Drop nulls for now
+hoteles = hoteles[complete.cases(hoteles), ]
+
+hoteles = hoteles |> sample_n(size = 1000)
+
+hoteles = hoteles |> select(-c(agent, company))
+# 
+# hoteles |> summary()
+# 
+# hoteles |> select( distribution_channel )
+```
+
+
+
+```{r}
+hoteles_split = initial_split(hoteles, strata = is_canceled, prop = 0.9)
+hoteles_entrena <- training(hoteles_split)
+
+hoteles_split
+```
+
+```{r}
+nrow(hoteles_entrena)
+hoteles |> count(is_canceled) |> 
+  mutate(pct = 100 * n / sum(n)) |> 
+  mutate(pct = round(pct, 2))
+```
+
+```{r}
+# preparacion de datos
+hoteles_receta <- recipe(is_canceled ~ . , hoteles_entrena) |>
+  step_dummy(all_nominal(), -is_canceled) |>
+  step_relevel(is_canceled,  ref_level = "cancelado", skip = TRUE) 
+hoteles_receta_norm <- hoteles_receta |> 
+  step_normalize(all_numeric_predictors())
+# modelos
+modelo_logistico <- 
+  logistic_reg(mixture = 0.5, penalty = 0.01) |> 
+  set_args(lambda.min_ratio = 1e-18) |> 
+  set_engine("glmnet") |> 
+  set_mode("classification")
+# modelo_kvmc <- nearest_neighbor(neighbors = 20) |> 
+#   set_mode("classification")
+```
+
+
+```{r}
+conjunto_wfs <- workflow_set(
+  preproc = list(receta_base = hoteles_receta, 
+                 receta_norm = hoteles_receta_norm),
+  models = list(reg_logistica = modelo_logistico
+                #, k_vecinos = modelo_kvmc,
+                ),
+  cross = FALSE
+)
+```
+
+
+```{r}
+val_split = manual_rset(hoteles_split |> list(), "val")
+mis_metricas <- metric_set(mn_log_loss, accuracy)
+resultados <- conjunto_wfs |> 
+  workflow_map("fit_resamples", resamples = val_split, 
+               metrics = mis_metricas)
+resultados |> select(wflow_id, result) |> 
+  unnest(result) |> unnest(.metrics)
+```

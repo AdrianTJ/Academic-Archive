@@ -1,0 +1,156 @@
+
+0.3033836	0.3975269	
+
+mixture = 0.75, penalty = 0.00464158883361278
+
+receta_hoteles <- recipe(is_canceled ~ 
+                           
+                                       # #Variables categoricas
+                                       # 
+                                       # # arrival_date_year +                #Chance afecta
+                                       arrival_date_month +
+                                       arrival_date_week_number +
+                                       # 
+                                       customer_type +
+                                       hotel +
+                                       meal +
+                                       market_segment +
+                                       distribution_channel +
+                                       reserved_room_type +
+                                       assigned_room_type +
+                                       deposit_type +
+                                       country +
+                                       agent +
+                                       company +
+                                       
+                                       cat_adults +
+                                       cat_stays_in_week_nights +
+                                       cat_stays_in_weekend_nights +
+                                       cat_previous_cancellations +
+                                       cat_previous_bookings_not_canceled +
+                                       cat_total_of_special_requests +
+                                       cat_required_car_parking_spaces +
+                                       cat_booking_changes +
+
+
+                                       #Variables numericas
+
+                                       is_repeated_guest +
+                                       igual_reservado +
+
+                                       adults +                           #Mejor la categorica
+                                       stays_in_week_nights +             #Mejor la categorica
+                                       stays_in_weekend_nights +          #Mejor la categorica
+                                       previous_cancellations +           #Mejor la categorica
+                                       previous_bookings_not_canceled +   #Mejor la categorica
+                                       total_of_special_requests +        #Mejor la categorica
+                                       required_car_parking_spaces +      #Mejor la categorica
+                                       booking_changes +                  #Mejor la categorica
+
+                                       # children +                         #Muy poca informacion
+                                       # babies +                           #Muy poca informacion
+
+                                       # days_in_waiting_list +             #Muy ruidosa
+
+                                       # adr +                              #Mejor log
+                                       log_adr +
+                                       # lead_time +                        #Mejor log
+                                       log_lead_time +
+                                       # # costo_total +                      #Mejor log
+                                       log_costo_total
+                                       # 
+                                       , data = hoteles_ent) |>
+  
+  
+  # 
+  # # step_novel(all_nominal(), new_level = "nuevo") %>% #nuevos en categoria nueva
+  # # step_unknown(all_nominal(), new_level = "otros") %>% #faltantes en categoria nueva
+  # 
+
+  #Normalize
+  step_normalize(
+    is_repeated_guest,
+                 igual_reservado,
+
+                 adults,                          #Mejor la categorica
+                 stays_in_week_nights,         #Mejor la categorica
+                 stays_in_weekend_nights,        #Mejor la categorica
+                 previous_cancellations,       #Mejor la categorica
+                 previous_bookings_not_canceled,  #Mejor la categorica
+                 total_of_special_requests,        #Mejor la categorica
+                 required_car_parking_spaces,      #Mejor la categorica
+                 booking_changes,                 #Mejor la categorica
+
+                 # children,                         #Muy poca informacion
+                 # babies,                          #Muy poca informacion
+
+                 # days_in_waiting_list,           #Muy ruidosa
+
+                 # adr,                             #Mejor log
+                 log_adr,
+                 # lead_time,                       #Mejor log
+                 log_lead_time,
+                 # # costo_total,                      #Mejor log
+                 log_costo_total) |>
+
+
+  #Dummies
+
+  step_dummy(
+             # # arrival_date_year,                #Chance afecta
+             arrival_date_month,
+             arrival_date_week_number,
+             
+             customer_type,
+             hotel,
+             meal,
+             market_segment,
+             distribution_channel,
+             reserved_room_type,
+             assigned_room_type,
+             deposit_type,
+             country,
+             agent,
+             company,
+
+             cat_adults,
+             cat_stays_in_week_nights,
+             cat_stays_in_weekend_nights,
+             cat_previous_cancellations,
+             cat_previous_bookings_not_canceled,
+             cat_total_of_special_requests,
+             cat_required_car_parking_spaces,
+             cat_booking_changes
+            ) |>
+
+
+  # #Interacciones
+  # 
+  # 
+  # # Numerica vs Categorica
+  # 
+  # step_interact(terms = ~ is_repeated_guest:starts_with("deposit_type")) |>
+  # step_interact(terms = ~ log_adr:starts_with("reserved_room_type")) |>
+  step_interact(terms = ~ log_lead_time:starts_with("cat_total_of_special_requests")) |>
+  step_interact(terms = ~ is_repeated_guest:starts_with("cat_total_of_special_requests")) |>
+  step_interact(terms = ~ total_of_special_requests:starts_with("cat_total_of_special_requests")) |>
+  step_interact(terms = ~ stays_in_week_nights:starts_with("cat_stays_in_week_nights")) |>
+  step_interact(terms = ~ required_car_parking_spaces:starts_with("cat_required_car_parking_spaces")) |>
+  # 
+  # 
+  # # Numerica vs Numerica
+  # 
+  step_interact(terms = ~ log_lead_time:is_repeated_guest) |>
+  step_interact(terms = ~ log_lead_time:log_adr) |>
+  step_interact(terms = ~ log_lead_time:log_costo_total)
+  # 
+  # 
+  # Categorica vs Categorica
+  
+  # step_interact(terms = ~ starts_with("arrival_date_month"):starts_with("arrival_date_year")) |>
+  # step_interact(terms = ~ starts_with("customer_type"):starts_with("hotel")) |>
+  # step_interact(terms = ~ starts_with("cat_total_of_special_requests"):starts_with("customer_type") ) |>
+  # step_interact(terms = ~ starts_with("cat_total_of_special_requests"):starts_with("company")) |>
+  # step_interact(terms = ~ starts_with("cat_total_of_special_requests"):starts_with("country"))
+  
+  

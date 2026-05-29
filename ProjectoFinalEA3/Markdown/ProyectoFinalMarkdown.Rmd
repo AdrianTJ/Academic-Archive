@@ -1,0 +1,235 @@
+---
+title: "ProyectoFinalMarkdown"
+author: "Jama, Berni, Jime, Tame"
+date: "12/15/2018"
+output: html_document
+---
+
+```{r Lectura_Datos, include=FALSE}
+directorio <- '/Users/ryo/Proyects/EA3ProyectoFinal/Archivos_R'
+setwd(directorio)
+Datos <- read.csv(file='../Datos/subset.csv',header=T,sep=",")
+Datos <- na.omit(Datos)
+sapply(Datos, class)
+```
+
+```{r Paquetes, include=FALSE}
+require(geosphere)
+require(lubridate)
+require(tidyverse)
+require(rgdal)
+require(tigris)
+require(dplyr)
+require(leaflet)
+require(sp)
+require(ggmap)
+require(maptools)
+require(broom)
+require(httr)
+require(ggthemes)
+require(randomForest)
+require(corrplot)
+require(candisc)
+library(vegan)
+library(factoextra)
+library(mclust)
+```
+
+```{r Distancias, include=FALSE}
+Datos <- dplyr::filter(Datos ,Datos$pickup_longitude != 0)
+Datos <- dplyr::filter(Datos ,Datos$pickup_longitude >= -80)
+Datos <- dplyr::filter(Datos ,Datos$pickup_longitude <= -70)
+
+Datos <- dplyr::filter(Datos ,Datos$pickup_latitude != 0)
+Datos <- dplyr::filter(Datos ,Datos$pickup_latitude >= 37)
+Datos <- dplyr::filter(Datos ,Datos$pickup_latitude <= 52)
+
+Datos <- dplyr::filter(Datos ,Datos$dropoff_latitude != 0)
+Datos <- dplyr::filter(Datos ,Datos$dropoff_latitude >= 37)
+Datos <- dplyr::filter(Datos ,Datos$dropoff_latitude <= 52)
+
+Datos <- dplyr::filter(Datos ,Datos$dropoff_longitude != 0)
+Datos <- dplyr::filter(Datos ,Datos$dropoff_longitude >= -80)
+Datos <- dplyr::filter(Datos ,Datos$dropoff_longitude <= -70)
+
+dista <- NULL
+
+for(i in 1:nrow(Datos)){
+  dista[i] <- distHaversine(c(Datos$pickup_longitude[i], Datos$pickup_latitude[i]), c(Datos$dropoff_longitude[i], Datos$dropoff_latitude[i]),r = 3963)
+}
+```
+
+```{r Fechas}
+fechas <- as.Date(Datos$pickup_datetime)
+
+toNumerics <- function(Date) {
+  stopifnot(inherits(Date, c("Date", "POSIXt")))
+  day <- as.numeric(strftime(Date, format = "%d"))
+  month <- as.numeric(strftime(Date, format = "%m"))
+  year <- as.numeric(strftime(Date, format = "%Y"))
+  list(year = year, month = month, day = day)
+}
+
+fechas <- toNumerics(fechas)
+
+fechas <- cbind(fechas$year,fechas$month,fechas$day)
+```
+
+```{r Tiempos}
+t <- strftime(Datos$pickup_datetime, format="%Y-%m-%d %H:%M:%S",tz = "UTC")
+yy <- as.POSIXct(t, format="%Y-%m-%d")
+t <- strftime(t, format="%H:%M:%S",tz = 'UTC')
+xx <- as.POSIXct(t, format="%H:%M:%S")
+```
+
+```{r Datos_Limpios}
+fechas <- as.data.frame(fechas)
+
+Limpia <- cbind(fechas,Datos$passenger_count,Datos$pickup_longitude,Datos$pickup_latitude,Datos$dropoff_longitude,Datos$dropoff_latitude,dista,Datos$fare_amount)
+
+colnames(Limpia) <- c("year","month",'day','passengers','pickup_longitude','pickup_latitude','dropoff_longitude','dropoff_latitude','distance','fare')
+```
+
+```{r Tiempos_Plots}
+plot(xx[1:2000], dista[1:2000], xlab="Time", ylab="Distancias")
+
+hist(xx,'hours')
+
+hist(yy,'years')
+```
+
+```{r Plot_Hist_Dias_Semana}
+diasemana <- weekdays(as.POSIXct(strftime(Datos$pickup_datetime, format="%Y-%m-%d %H:%M:%S",tz = "UTC")))
+diasemana <- as.factor(diasemana)
+diasemana <- factor(diasemana,levels(diasemana)[c(2,6,7,5,1,3,4)])
+barplot(prop.table(table(diasemana)))
+```
+
+
+```{r Regresion_Sin_Dias}
+taxis.lm <- lm(fare ~ . , data = Limpia)
+
+summary(taxis.lm)
+```
+
+```{r Regresion_Completa}
+Limpia2 <- cbind(diasemana,xx,Limpia[,-3])
+colnames(Limpia2) <- c('weekday','time',"year","month",'passengers','pickup_longitude','pickup_latitude','dropoff_longitude','dropoff_latitude','distance','fare')
+
+taxis2.lm <- lm(fare ~ . , data = Limpia2)
+
+summary(taxis2.lm)
+```
+
+```{r Preprocesando_Datos_Mapa}
+datos1 <- aggregate(.~Limpia$pickup_longitude + Limpia$pickup_latitude, Limpia, sum)
+
+min_lat <- 40.5774
+max_lat <- 40.9176
+min_long <- -74.15
+max_long <- -73.7004
+```
+
+```{r Plot_Pickup}
+plot1 <- ggplot(datos1, aes(x=pickup_longitude, y=pickup_latitude)) +
+  geom_point(size=0.03) +
+  scale_x_continuous(limits=c(min_long, max_long)) +
+  scale_y_continuous(limits=c(min_lat, max_lat)) + 
+  theme_dark()
+
+plot1
+```
+
+```{r Random_Forest}
+samplesize <- 8000
+muestrademuestra<-sample_n(Limpia2,10000,replace = F)
+set.seed(12345)
+muestra<-sort(sample(1:nrow(muestrademuestra),samplesize))
+limpia2_train<-muestrademuestra[muestra,]
+limpia2_test<-muestrademuestra[-muestra,]
+
+train_fit_tree<-randomForest(fare~.,data=limpia2_train,ntree = 1000,importance=TRUE,proximity=TRUE)
+importance(train_fit_tree,2)
+plot(train_fit_tree)
+
+predict_rf<-predict(train_fit_tree,newdata=limpia2_test[,-11])
+hist(predict_rf)
+hist(limpia2_test$fare)
+```
+
+```{r Plot_Correlacion}
+corrplot(cor((Limpia2[-c(1:2)]), method = 'pearson'))
+```
+
+```{r Correlacion_Canonica}
+explicativas <- Limpia2[,3:10]
+respuesta <- Limpia2[,11]
+taxis.cc1 <-  CCorA(respuesta,explicativas,stand.Y = T,stand.X = T)
+```
+
+```{r}
+taxis.pca <- princomp(Limpia2[,3:10],cor = TRUE)
+summary(taxis.pca,loadings = TRUE)
+fviz_screeplot(taxis.pca)
+fviz_pca_var(taxis.pca)
+```
+
+
+```{r PCA_Chafa}
+taxis.pca <- princomp(Limpia2[,6:10],cor = TRUE)
+summary(taxis.pca,loadings = TRUE)
+fviz_screeplot(taxis.pca)
+fviz_pca_var(taxis.pca)
+```
+
+```{r}
+sample <- sample_n(Limpia2,5000,replace = FALSE)
+
+taxist.clusters <- Mclust(sample[,6:7])
+
+Limpia3 <- cbind(sample,cluster = taxist.clusters$classification)
+
+set.seed(12345)
+muestra<-sort(sample(1:nrow(Limpia3),4000))
+limpia3_train<-Limpia3[muestra,]
+limpia3_test<-Limpia3[-muestra,]
+
+train_fit_tree2<-randomForest(fare~.,data=limpia3_train,ntree = 1000,importance=TRUE,proximity=TRUE)
+importance(train_fit_tree2,2)
+plot(train_fit_tree2)
+
+predict_rf <- predict(train_fit_tree2,newdata=(limpia3_test%>%filter(cluster == 1))[,-11])
+qplot(predict_rf, geom="histogram") + theme_wsj()
+  
+predict_rf <- predict(train_fit_tree2,newdata=(limpia3_test%>%filter(cluster == 2))[,-11])
+qplot(predict_rf, geom="histogram") + theme_wsj()
+  
+predict_rf <- predict(train_fit_tree2,newdata=(limpia3_test%>%filter(cluster == 3))[,-11])
+qplot(predict_rf, geom="histogram") + theme_wsj()
+  
+predict_rf <- predict(train_fit_tree2,newdata=(limpia3_test%>%filter(cluster == 4))[,-11])
+qplot(predict_rf, geom="histogram") + theme_wsj()
+  
+predict_rf <- predict(train_fit_tree2,newdata=(limpia3_test%>%filter(cluster == 5))[,-11])
+qplot(predict_rf, geom="histogram") + theme_wsj()
+  
+predict_rf <- predict(train_fit_tree2,newdata=(limpia3_test%>%filter(cluster == 6))[,-11])
+qplot(predict_rf, geom="histogram") + theme_wsj()
+  
+predict_rf <- predict(train_fit_tree2,newdata=(limpia3_test%>%filter(cluster == 7))[,-11])
+qplot(predict_rf, geom="histogram") + theme_wsj()
+  
+predict_rf <- predict(train_fit_tree2,newdata=(limpia3_test%>%filter(cluster == 8))[,-11])
+qplot(predict_rf, geom="histogram") + theme_wsj()
+  
+predict_rf <- predict(train_fit_tree2,newdata=(limpia3_test%>%filter(cluster == 9))[,-11])
+qplot(predict_rf, geom="histogram") + theme_wsj()
+
+```
+
+
+
+
+
+
+

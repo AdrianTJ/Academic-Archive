@@ -1,0 +1,1483 @@
+---
+title: "EDA"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# install.packages("entropy")
+
+library(tidyverse)
+library(tidymodels)
+library(rsample)
+library(patchwork)
+library(entropy)
+
+source("hoteles_aux.R")
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## EDA
+
+### Fechas
+
+```{r}
+hoteles <- read.csv("Datos/entrena.csv") 
+hoteles$children[is.na(hoteles$children)] <- 0 # Si ninios es NA entonces se va a 0 (la mediana), solo hay 4 NA. 
+
+# Convertimos los meses a valores numericos
+hoteles <- hoteles |> mutate(month_as_number = map_dbl(arrival_date_month, month_to_number))
+
+# Creamos la variable de fecha para poder acomodarlos en el tiempo
+hoteles <- hoteles |> 
+  mutate(fecha = paste(arrival_date_year, month_as_number, arrival_date_day_of_month) |>
+                as.Date(format = '%Y %m %d')) |>
+  arrange(by = fecha)
+```
+
+```{r}
+hoteles_prueba <- read.csv("Datos/prueba.csv") 
+hoteles_prueba$children[is.na(hoteles_prueba$children)] <- 0 # Si ninios es NA entonces se va a 0 (la mediana), solo hay 4 NA. 
+# Convertimos los meses a valores numericos
+hoteles_prueba <- hoteles_prueba |> mutate(month_as_number = map_dbl(arrival_date_month, month_to_number))
+
+# Creamos la variable de fecha para poder acomodarlos en el tiempo
+hoteles_prueba <- hoteles_prueba |> 
+  mutate(fecha = paste(arrival_date_year, month_as_number, arrival_date_day_of_month) |>
+                as.Date(format = '%Y %m %d')) |>
+  arrange(by = fecha)
+```
+
+Notamos como justo el conjunto de entrenamiento acaba y el de prueba empieza,
+por lo que hay que tener en cuenta esto al construir los sets de entrenamiento
+y validacion
+
+```{r}
+rbind(
+  hoteles |> select(fecha) |> tail(),
+  hoteles_prueba |> select(fecha) |> head()
+)
+```
+Notamos que existen componentes temporales en la cantidad total de personas
+que se registran:
+
+```{r}
+hoteles |> 
+  group_by(fecha) |>
+  count() |>
+  ggplot(aes(x = fecha, y = n)) +
+  geom_line()
+```
+
+
+Y se preserva hasta la de prueba:
+
+```{r}
+todos <- rbind(hoteles |> mutate(muestra = "entrena") |> select(-c(is_canceled)),
+               hoteles_prueba |> mutate(muestra = "prueba") |> select(-c(id)))
+
+todos |> 
+  group_by(fecha) |>
+  count() |>
+  merge(todos, by = "fecha") |>
+  select(c(fecha, n, muestra)) |>
+  ggplot(aes(x = fecha, y = n, colour = muestra)) +
+  geom_line()
+```
+
+Observamos que a pesar de esto, la proporcion de cancelados no muestra
+un efecto temporal tan grande como la cuenta
+```{r}
+hoteles |> 
+  mutate(is_canceled_num = ifelse(is_canceled == "no_cancelado", 0, 1)) |>
+  group_by(fecha) |>
+  summarise(prop_cancelados = mean(is_canceled_num)) |>
+  ggplot(aes(x = fecha, y = prop_cancelados)) +
+  geom_line()
+```
+
+### Facilitar uso del codigo
+
+Breve idea de como imprimir todas las interacciones. Falta desasrrollar.
+
+```{r}
+columnas <- hoteles |> colnames()
+aux <- columnas[c(1:3)]
+for (i in aux){
+  for (j in aux){
+    if (i != j){
+      print(paste0("starts_with(",i,"):starts_with(",j,")"))
+    }
+  }}
+```
+### Transformaciones
+
+#### Intro
+
+Haremos transformaciones que consideremos pertinentes.
+
+Antes de comenzar, nos gustaria tener is_canceled en 0 y 1 para facilitar calculos,
+así como crear otro dataframe para no modificar el original.
+
+```{r}
+hoteles_mod <- hoteles
+
+hoteles_mod <- hoteles_mod |>
+                mutate(num_is_canceled = ifelse(is_canceled == "no_cancelado", 0, 1))
+```
+
+
+Empezamos con las numericas. Quiza podemos aplicar algunos logaritmos.
+
+```{r}
+nums <- unlist(lapply(hoteles_mod, is.numeric))  
+hoteles_mod[, nums] |> summary()
+```
+
+
+Observamos algunas correlaciones, y si bien no son muy grandes en valor absoluto,
+desde esta podemos ver a los candidatos a ser mejores variables:
+
+```{r}
+correlaciones <- hoteles_mod[, nums] |> cor() |> data.frame()
+
+sorted_correlaciones <- correlaciones |>
+                          select(num_is_canceled)|>
+                          mutate(absolute_corr = abs(num_is_canceled)) |>
+                          arrange(desc(absolute_corr))
+
+#Quitamos la corr consigo misma
+sorted_correlaciones <- sorted_correlaciones |>
+                          mutate(names = row.names(sorted_correlaciones) ) |>
+                          filter(names != "num_is_canceled")
+
+sorted_correlaciones |>
+  select(-names)|>
+  head(5)
+```
+
+```{r}
+sorted_correlaciones |>
+  ggplot(aes(x = names, y = num_is_canceled)) +
+  geom_bar(stat = "identity") +
+  coord_flip()
+```
+
+Tambien nos interesara ver las mayores correlaciones en valor absoluto entre
+variables (aun falta)
+
+```{r}
+# correlaciones |> pivot_longer()
+```
+
+Observamos ademas las varianzas. Esto ya que, variables con muy poca varianza seran de
+muy poca informacion al modelo, pues practicamente sus efectos serian capturados por el intercept.
+
+```{r}
+covariances <- hoteles |> 
+                summarise_if(is.numeric, var)
+
+as_tibble(cbind(nms = names(covariances), t(covariances))) |>
+  mutate(covariances = as.numeric(V2)) |>
+  select(-V2) |>
+  arrange(desc(covariances))
+```
+No obstante, si normalizamos entonces la varianza ya no afectaria. Tambien,
+si hacemos arboles, tampoco afecta. En todo caso, quisieramos ver cuales son
+las variables con mayor entropia.
+
+```{r}
+entropies <- hoteles |> 
+              summarise_if(is.numeric, entropy)
+
+as_tibble(cbind(nms = names(entropies), t(entropies))) |>
+  mutate(entropy = as.numeric(V2)) |>
+  select(-V2) |>
+  arrange(desc(entropy))
+
+```
+
+#### lead_time
+
+La definicion de esta variable es:
+Number of days that elapsed between the entering date of the booking into the PMS and the arrival date
+
+Dados sus valores, probablemente nos sirva mas el logaritmo.
+
+```{r}
+hoteles_mod <- hoteles_mod |>
+                 mutate(log_lead_time = log(1+lead_time))
+
+g1 <- hoteles_mod |>
+  ggplot(aes(x = lead_time)) +
+  geom_histogram()
+
+g2 <- hoteles_mod |>
+  ggplot(aes(x = log_lead_time)) +
+  geom_histogram()
+  
+g1 + g2
+```
+
+Esta variable es la de mayor correlacion con is_canceled:
+```{r}
+hoteles_mod |> select(c("num_is_canceled", "lead_time", "log_lead_time")) |> cor()
+```
+
+```{r}
+g1 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = lead_time)) +
+        geom_boxplot()
+g2 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = log_lead_time)) +
+        geom_boxplot()
+g1 + g2
+```
+
+
+#### adults
+
+La definicion de esta variable es:
+Number of adults
+
+Transformando en logaritmo para ver si nos serviria mas, notamos que probablemente
+no vaya a ser el caso:
+
+```{r}
+hoteles_mod <- hoteles_mod |>
+                 mutate(log_adults = log(1+adults))
+
+g1 <- hoteles_mod |>
+  ggplot(aes(sample = adults)) +
+  geom_qq()
+
+g2 <- hoteles_mod |>
+  ggplot(aes(sample = log_adults)) +
+  geom_qq()
+
+g1 + g2
+```
+
+No parece haber una correlacion particularmente alta, pero aun asi muy 
+probablemente ocuparemos esta variable.
+
+```{r}
+hoteles_mod |> select(c("num_is_canceled", "adults", "log_adults")) |> cor()
+```
+No obstante, ocurre algo muy interesante al observar los valores extremos de esta
+variable. Notamos que si hacemos un corte en alrededor del valor 5 de adults,
+todos los que rebasan esta cantidad cancelaron. Podriamos entonces crear una variable
+indicadora de si hay mas de N cantidad de adultos.
+
+```{r}
+g1 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = adults)) +
+        geom_boxplot() +
+        geom_hline(yintercept = 5, color = "red")
+g2 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = log_adults)) +
+        geom_boxplot()
+g1 + g2
+```
+Quitando estos casos, notamos que no hay una relacion lineal entre la proporcion
+de cancelados, sino tal vez puede ser cuadrada. 
+
+
+```{r}
+
+hoteles_mod |>
+        filter(adults < 5) |>
+        group_by(adults) |>
+        summarise(prop_cancelados = mean(num_is_canceled))
+
+g1 <- hoteles_mod |>
+        filter(adults < 5) |>
+        group_by(adults) |>
+        summarise(prop_cancelados = mean(num_is_canceled)) |>
+        ggplot(aes(x = adults, y = prop_cancelados)) +
+        geom_point() 
+
+g2 <- hoteles_mod |>
+        filter(adults < 5) |>
+        group_by(adults) |>
+        summarise(n = n()) |>
+        ggplot(aes(x = adults, y = n)) +
+        geom_point()
+g1 + g2
+
+```
+
+No obstante, no podemos ocupar como tal el cuadrado ya que justo los de arriba 
+de 5 son los que cancelan (3 se va a 9 y 4 a 16).
+
+Quiza lo mejor que podemos hacer es hacer a adults una categorica:
+
+  [0,1,2,3,4,5,6+]
+
+y probablemente, el coeficiente en una regresion logistica sera alto para 6+,
+o bien el corte de la categoria 6+ se hara prontamente en los arboles.
+
+
+
+```{r}
+hoteles_mod |>
+  mutate(cat_adults = cut(adults, breaks = c(0,1,2,Inf), include.lowest = T)) |>
+  group_by(cat_adults) |>
+  summarise(n = 100*n()/dim(hoteles_mod)[1])
+```
+
+
+#### stays_in_weekend_nights
+
+La definicion de esta variable es:
+Number of weekend nights (Saturday or Sunday) the guest stayed or booked to stay at the hotel
+
+Transformando en logaritmo para ver si nos serviria mas, notamos que probablemente
+no vaya a ser el caso:
+
+```{r}
+hoteles_mod <- hoteles_mod |>
+                 mutate(log_stays_in_weekend_nights = log(stays_in_weekend_nights))
+
+#Dado que hay lead_time iguales a 0, reemplazamos los menos infinito con 0
+hoteles_mod$log_stays_in_weekend_nights[!is.finite(hoteles_mod$log_stays_in_weekend_nights)] <- 0
+
+g1 <- hoteles_mod |>
+  ggplot(aes(sample = stays_in_weekend_nights)) +
+  geom_qq()
+
+g2 <- hoteles_mod |>
+  ggplot(aes(sample = log_stays_in_weekend_nights)) +
+  geom_qq()
+
+g1 + g2
+
+# g1 <- hoteles_mod |>
+#   ggplot(aes(x = stays_in_weekend_nights)) +
+#   geom_histogram()
+# 
+# g2 <- hoteles_mod |>
+#   ggplot(aes(x = log_stays_in_weekend_nights)) +
+#   geom_histogram()
+# 
+# g1 + g2
+```
+
+La correlacion es muy baja.
+
+```{r}
+hoteles_mod |> select(c("num_is_canceled", "stays_in_weekend_nights", "log_stays_in_weekend_nights")) |> cor()
+```
+
+No ocurre nada interesante al comparar con is_canceled. Quiza la dejemos por
+alguna interaccion que no estemos observando.
+
+```{r}
+g1 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = stays_in_weekend_nights)) +
+        geom_boxplot()
+g2 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = log_stays_in_weekend_nights)) +
+        geom_boxplot()
+g1 + g2
+```
+
+Vemos sin embargo que hay algunos grupos que se forman al comparar con la
+proporcion de cancelados:
+
+```{r}
+g1 <- hoteles_mod |>
+        group_by(stays_in_weekend_nights) |>
+        summarise(prop_cancelados = mean(num_is_canceled)) |>
+        ggplot(aes(x = stays_in_weekend_nights, y = prop_cancelados)) +
+        geom_point()
+
+g2 <- hoteles_mod |>
+        group_by(stays_in_weekend_nights) |>
+        summarise(n = n()) |>
+        ggplot(aes(x = stays_in_weekend_nights, y = n)) +
+        geom_point()
+g1 + g2
+```
+
+Quiza podemos crear 3 categorias:
+
+  [(0,1,2,3,4),(5,6,7,8,9),10+]
+
+Probamos solo para ver si tiene sentido, aunque vemos que la cuenta de casos
+no nos favorece:
+
+
+```{r}
+hoteles_mod |>
+   mutate(cuantil = cut(stays_in_weekend_nights, breaks = c(0,4,9,Inf), include.lowest = T)) |>
+   select(c("cuantil", "stays_in_weekend_nights")) |>
+   group_by(cuantil) |>
+   summarise(n = n(),
+              porc = 100*n()/dim(hoteles_mod)[1])
+```
+
+```{r}
+hoteles_mod |>
+   mutate(cuantil = cut(stays_in_weekend_nights, breaks = c(0,4,9,Inf), include.lowest = T)) |>
+   group_by(cuantil) |>
+   summarise(proporcion = mean(num_is_canceled)) |>
+   select(c("cuantil", "proporcion")) |>
+   ggplot(aes(x = cuantil, y = proporcion)) + geom_point()
+```
+
+Probablemente no logramos mucho y mas bien arruinemos alguna interaccion, dadas
+las bajas cuentas de valores para (4,9] y (9, Inf].
+
+Mejor, en todo caso podemos hacer:
+
+  [0,1,2,3,4,(5,6,7,8,9),10+]
+  
+  
+  
+```{r}
+hoteles_mod |>
+   mutate(cuantil = cut(stays_in_weekend_nights, breaks = c(-1,0,1,2,3,Inf), include.lowest = T)) |>
+   select(c("cuantil", "stays_in_weekend_nights")) |>
+   group_by(cuantil) |>
+   summarise(porc = 100*n()/dim(hoteles_mod)[1])
+```
+Si bien las proporciones no son tan diferentes, en general puede ser buena idea
+ocupar esta transformacion.
+
+```{r}
+hoteles_mod |>
+   mutate(cuantil = cut(stays_in_weekend_nights, breaks = c(-1,0,1,2,3,4,9,Inf), include.lowest = T)) |>
+   group_by(cuantil) |>
+   summarise(proporcion = mean(num_is_canceled)) |>
+   select(c("cuantil", "proporcion")) |>
+   ggplot(aes(x = cuantil, y = proporcion)) + geom_point()
+```
+
+
+
+
+
+
+#### stays_in_week_nights
+
+La definicion de esta variable es:
+Number of week nights (Monday to Friday) the guest stayed or booked to stay at the hotel
+
+Transformando en logaritmo para ver si nos serviria mas, notamos que probablemente
+no vaya a ser el caso:
+
+```{r}
+hoteles_mod <- hoteles_mod |>
+                 mutate(log_stays_in_week_nights = log(stays_in_week_nights))
+
+#Dado que hay lead_time iguales a 0, reemplazamos los menos infinito con 0
+hoteles_mod$log_stays_in_week_nights[!is.finite(hoteles_mod$log_stays_in_week_nights)] <- 0
+
+g1 <- hoteles_mod |>
+  ggplot(aes(sample = stays_in_week_nights)) +
+  geom_qq()
+
+g2 <- hoteles_mod |>
+  ggplot(aes(sample = log_stays_in_week_nights)) +
+  geom_qq()
+
+g1 + g2
+```
+
+La correlacion es muy baja.
+
+```{r}
+hoteles_mod |> select(c("num_is_canceled", "stays_in_week_nights", "log_stays_in_week_nights")) |> cor()
+```
+
+No ocurre nada interesante al comparar con is_canceled. Quiza la dejemos por
+alguna interaccion que no estemos observando.
+
+```{r}
+g1 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = stays_in_week_nights)) +
+        geom_boxplot()
+g2 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = log_stays_in_week_nights)) +
+        geom_boxplot()
+g1 + g2
+```
+
+Vemos una relacion interesante al tomar en cuenta la proporcion, ya que para antes
+de los 25 dias (alrededor de un mes sumando algunos fines), la proporcion de 
+cancelados crece. Posterior a esto desaparece el efecto.
+
+```{r}
+g1 <- hoteles_mod |>
+        group_by(stays_in_week_nights) |>
+        summarise(prop_cancelados = mean(num_is_canceled)) |>
+        ggplot(aes(x = stays_in_week_nights, y = prop_cancelados)) +
+        geom_point()
+
+g2 <- hoteles_mod |>
+        group_by(stays_in_week_nights) |>
+        summarise(n = n()) |>
+        ggplot(aes(x = stays_in_week_nights, y = n)) +
+        geom_point()
+g1 + g2
+```
+No obstante, entre el 0 y el 10 vemos practicamente ruido, y ahi se concentra
+casi el 90% de los datos. Por esto, quiza convenga mas una crear una categorica
+con 3 niveles:
+
+  [(0:10),(11:25),25+]
+  
+Y *hacerla interactuar* con stays_in_week_nights.
+  
+Probamos solo para ver si tiene sentido, aunque vemos que la cuenta de casos
+no nos favorece:
+
+```{r}
+hoteles_mod |>
+   mutate(cuantil = cut(stays_in_week_nights, breaks = c(-1,0,5,9,Inf), include.lowest = T)) |>
+   select(c("cuantil", "stays_in_week_nights")) |>
+   group_by(cuantil) |>
+   summarise(porc = 100*n()/dim(hoteles_mod)[1])
+```
+
+```{r}
+hoteles_mod |>
+   mutate(cuantil = cut(stays_in_week_nights, breaks = c(0,10,25,Inf), include.lowest = T)) |>
+   group_by(cuantil) |>
+   summarise(proporcion = mean(num_is_canceled)) |>
+   select(c("cuantil", "proporcion")) |>
+   ggplot(aes(x = cuantil, y = proporcion)) + geom_point()
+```
+
+
+
+
+
+#### previous_cancellations
+
+La definicion de esta variable es:
+Number of previous bookings that were cancelled by the customer prior to the current booking
+
+
+La correlacion es d las mas altas de acuerdo a lo que vimos previamente,
+aunque en si es baja.
+
+```{r}
+hoteles_mod |> select(c("num_is_canceled", "previous_cancellations")) |> cor()
+```
+
+No ocurre nada interesante al comparar con is_canceled, solo algunos valores
+atipicos altos por encima de 15. Quiza la dejemos por
+alguna interaccion que no estemos observando.
+
+```{r}
+g1 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = previous_cancellations)) +
+        geom_boxplot()
+
+g1
+```
+
+Algo
+
+```{r}
+g1 <- hoteles_mod |>
+        group_by(previous_cancellations) |>
+        summarise(prop_cancelados = mean(num_is_canceled)) |>
+        ggplot(aes(x = previous_cancellations, y = prop_cancelados)) +
+        geom_point()
+
+g2 <- hoteles_mod |>
+        group_by(previous_cancellations) |>
+        summarise(n = n()) |>
+        ggplot(aes(x = previous_cancellations, y = n)) +
+        geom_point()
+g1 + g2
+```
+Algo
+
+```{r}
+hoteles_mod |>
+   mutate(cuantil = cut(previous_cancellations, breaks = c(-1,0,1,5,Inf), include.lowest = T)) |>
+   select(c("cuantil", "previous_cancellations", "num_is_canceled")) |>
+   group_by(cuantil) |>
+   summarise(porc = 100*n()/dim(hoteles_mod)[1],
+             perc_cancel = mean(num_is_canceled))
+```
+
+
+#### is_repeated_guest
+
+La definicion de esta variable es:
+Value indicating if the booking name was from a repeated guest (1) or not (0)
+
+
+Correlacion:
+
+```{r}
+hoteles_mod |> select(c("num_is_canceled", "is_repeated_guest")) |> cor()
+```
+
+Vemos que es mucho mas probable que cancele dado que que NO sea un cliente
+repetido, por lo que si nos gustaria meter esta variable asi como esta.
+
+```{r}
+g1 <- hoteles_mod |>
+        group_by(is_repeated_guest) |>
+        summarise(prop_cancelados = mean(num_is_canceled)) |>
+        ggplot(aes(x = is_repeated_guest, y = prop_cancelados)) +
+        geom_point()
+
+g2 <- hoteles_mod |>
+        group_by(is_repeated_guest) |>
+        summarise(n = n()) |>
+        ggplot(aes(x = is_repeated_guest, y = n)) +
+        geom_point()
+g1 + g2
+```
+
+#### days_in_waiting_list			
+
+
+La definicion de esta variable es:
+Number of days the booking was in the waiting list before it was confirmed to the customer
+
+Correlacion:
+
+```{r}
+hoteles_mod |> select(c("num_is_canceled", "days_in_waiting_list")) |> cor()
+```
+
+No ocurre nada interesante al comparar con is_canceled:
+
+```{r}
+g1 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = days_in_waiting_list)) +
+        geom_boxplot()
+
+g1
+```
+
+Vemos demasiado ruido en esta variable. A pesar de parecer intuitivo el asumir
+que a mayor days_in_waiting_list, mayor proporcion de is_canceled, los datos no
+muestran esto. Quiza sea buena idea quitarla para que no ensucie.
+
+```{r}
+g1 <- hoteles_mod |>
+        group_by(days_in_waiting_list) |>
+        summarise(prop_cancelados = mean(num_is_canceled)) |>
+        ggplot(aes(x = days_in_waiting_list, y = prop_cancelados)) +
+        geom_point()
+
+g2 <- hoteles_mod |>
+        group_by(days_in_waiting_list) |>
+        summarise(n = n()) |>
+        ggplot(aes(x = days_in_waiting_list, y = n)) +
+        geom_point()
+g1 + g2
+```
+
+
+#### previous_bookings_not_canceled
+
+La definicion de esta variable es:
+Number of previous bookings not cancelled by the customer prior to the current booking
+
+Correlacion:
+
+```{r}
+hoteles_mod |> select(c("num_is_canceled", "previous_bookings_not_canceled")) |> cor()
+```
+
+A simple vista no ocurre algo interesante:
+
+```{r}
+g1 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = previous_bookings_not_canceled)) +
+        geom_boxplot()
+
+g1
+```
+
+Parece haber un efecto creciente en la proporcion de cancelados con respecto a 
+los datos. No obstante, tenemos demasiados datos datos acumulados en 0.
+
+```{r}
+g1 <- hoteles_mod |>
+        group_by(previous_bookings_not_canceled) |>
+        summarise(prop_cancelados = mean(num_is_canceled)) |>
+        ggplot(aes(x = previous_bookings_not_canceled, y = prop_cancelados)) +
+        geom_point()
+
+g2 <- hoteles_mod |>
+        group_by(previous_bookings_not_canceled) |>
+        summarise(n = n()) |>
+        ggplot(aes(x = previous_bookings_not_canceled, y = n)) +
+        geom_point()
+g1 + g2
+```
+
+Probablemente la dejemos por alguna otra interaccion que no estemos observando.Hay
+un efecto extraño en que, si bien en general noi hay cancelaciones para la mayoria de
+los dias despues del 15avo mas o menos, si hay algunos outliers, y no es por tan pocas
+observaciones como esperariamos:
+
+```{r}
+hoteles_mod |>
+   mutate(cuantil = cut(previous_bookings_not_canceled, breaks = c(-1,0,9,15,Inf), include.lowest = T)) |>
+   # mutate(cuantil = cut(previous_bookings_not_canceled, breaks = c(-1,0,1,2,3,4,5,6,7,8,9,10,15,Inf), include.lowest = T)) |>
+
+   select(c("cuantil", "previous_bookings_not_canceled", "num_is_canceled")) |>
+   group_by(cuantil) |>
+   summarise(porc = 100*n()/dim(hoteles_mod)[1],
+             n = n(),
+             perc_cancel = mean(num_is_canceled))
+```
+
+
+
+
+#### total_of_special_requests 
+
+La definicion de esta variable es:
+Number of special requests made by the customer (e.g. twin bed or high floor)
+
+Transformando en logaritmo para ver si nos serviria mas, notamos que probablemente
+no vaya a ser el caso:
+
+```{r}
+hoteles_mod <- hoteles_mod |>
+                 mutate(log_total_of_special_requests = log(1+total_of_special_requests))
+
+g1 <- hoteles_mod |>
+  ggplot(aes(sample = total_of_special_requests)) +
+  geom_qq()
+
+g2 <- hoteles_mod |>
+  ggplot(aes(sample = log_total_of_special_requests)) +
+  geom_qq()
+
+g1 + g2
+```
+
+Esta variable tien la segunda correlacion mas alta (en valor absoluto):
+
+```{r}
+hoteles_mod |> select(c("num_is_canceled", "total_of_special_requests", "log_total_of_special_requests")) |> cor()
+```
+
+Vemos un efecto considerable en lso no cancelados, lo cual es intuitivo dada la
+correlacion negativa.
+
+```{r}
+g1 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = total_of_special_requests)) +
+        geom_boxplot()
+g2 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = log_total_of_special_requests)) +
+        geom_boxplot()
+g1 + g2
+```
+
+Es muy claro que con que haya al menos un special request, la proporcion de
+cancelados baja.
+
+```{r}
+g1 <- hoteles_mod |>
+        group_by(total_of_special_requests) |>
+        summarise(prop_cancelados = mean(num_is_canceled)) |>
+        ggplot(aes(x = total_of_special_requests, y = prop_cancelados)) +
+        geom_point()
+
+g2 <- hoteles_mod |>
+        group_by(total_of_special_requests) |>
+        summarise(n = n()) |>
+        ggplot(aes(x = total_of_special_requests, y = n)) +
+        geom_point()
+g1 + g2
+```
+ Entonces, quiza podriamos hacer una indicadora (hay o no hay):
+
+  [0, 1+]
+  
+Y *hacerla interactuar* con total_of_special_requests
+  
+Probamos solo para ver si tiene sentido, aunque vemos que la cuenta de casos
+no nos favorece:
+
+```{r}
+hoteles_mod |>
+   mutate(cuantil = cut(total_of_special_requests, breaks = c(-1,0, 1, 2, 3, Inf), include.lowest = T)) |>
+   select(c("cuantil", "total_of_special_requests", "num_is_canceled")) |>
+   group_by(cuantil) |>
+   summarise(porc = 100*n()/dim(hoteles_mod)[1], 
+             perc_canceled = mean(num_is_canceled))
+```
+
+```{r}
+hoteles_mod |>
+   mutate(cuantil = cut(total_of_special_requests, breaks = c(-1,0), include.lowest = T)) |>
+   group_by(cuantil) |>
+   summarise(proporcion = mean(num_is_canceled)) |>
+   select(c("cuantil", "proporcion")) |>
+   ggplot(aes(x = cuantil, y = proporcion)) + geom_point()
+```
+
+
+#### required_car_parking_spaces 
+
+La definicion de esta variable es:
+Number of car parking spaces required by the customer
+
+Transformando en logaritmo para ver si nos serviria mas, notamos que probablemente
+no vaya a ser el caso:
+
+```{r}
+hoteles_mod <- hoteles_mod |>
+                 mutate(log_required_car_parking_spaces = log(1+required_car_parking_spaces))
+
+g1 <- hoteles_mod |>
+  ggplot(aes(sample = required_car_parking_spaces)) +
+  geom_qq()
+
+g2 <- hoteles_mod |>
+  ggplot(aes(sample = log_required_car_parking_spaces)) +
+  geom_qq()
+
+g1 + g2
+```
+
+Esta variable tien la tercera correlacion mas alta (en valor absoluto):
+
+```{r}
+hoteles_mod |> select(c("num_is_canceled", "required_car_parking_spaces", "log_required_car_parking_spaces")) |> cor()
+```
+
+Ninguno de los que pidio mas de un required_car_parking_spaces cancelo,
+entonces probablemente si nos vaya a servir:
+
+```{r}
+g1 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = required_car_parking_spaces)) +
+        geom_boxplot()
+g2 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = log_required_car_parking_spaces)) +
+        geom_boxplot()
+g1 + g2
+```
+
+Es muy claro que con que haya al menos un special request, la proporcion de
+cancelados baja.
+
+```{r}
+g1 <- hoteles_mod |>
+        group_by(required_car_parking_spaces) |>
+        summarise(prop_cancelados = mean(num_is_canceled)) |>
+        ggplot(aes(x = required_car_parking_spaces, y = prop_cancelados)) +
+        geom_point()
+
+g2 <- hoteles_mod |>
+        group_by(required_car_parking_spaces) |>
+        summarise(n = n()) |>
+        ggplot(aes(x = required_car_parking_spaces, y = n)) +
+        geom_point()
+g1 + g2
+```
+ Entonces, quiza podriamos hacer una indicadora (hay o no hay):
+
+  [0, 1+]
+  
+Y *hacerla interactuar* con required_car_parking_spaces, o hasta solo dejar
+la indicadora.
+  
+Probamos solo para ver si tiene sentido, aunque vemos que la cuenta de casos
+no nos favorece:
+
+```{r}
+hoteles_mod |>
+   mutate(cuantil = cut(required_car_parking_spaces, breaks = c(-1,0, Inf), include.lowest = T)) |>
+   select(c("cuantil", "required_car_parking_spaces")) |>
+   group_by(cuantil) |>
+   summarise(porc = 100*n()/dim(hoteles_mod)[1])
+```
+
+```{r}
+hoteles_mod |>
+   mutate(cuantil = cut(required_car_parking_spaces, breaks = c(-1,0), include.lowest = T)) |>
+   group_by(cuantil) |>
+   summarise(proporcion = mean(num_is_canceled)) |>
+   select(c("cuantil", "proporcion")) |>
+   ggplot(aes(x = cuantil, y = proporcion)) + geom_point()
+```
+
+
+#### booking_changes 
+
+La definicion de esta variable es:
+Number of changes/amendments made to the booking from the moment the booking was entered on the PMS until the moment of check-in or cancellation
+
+Transformando en logaritmo para ver si nos serviria mas, notamos que probablemente
+no vaya a ser el caso:
+
+```{r}
+hoteles_mod <- hoteles_mod |>
+                 mutate(log_booking_changes = log(1+booking_changes))
+
+g1 <- hoteles_mod |>
+  ggplot(aes(sample = booking_changes)) +
+  geom_qq()
+
+g2 <- hoteles_mod |>
+  ggplot(aes(sample = log_booking_changes)) +
+  geom_qq()
+
+g1 + g2
+```
+
+Esta variable tiene la cuarta correlacion mas alta (en valor absoluto):
+
+```{r}
+hoteles_mod |> select(c("num_is_canceled", "booking_changes", "log_booking_changes")) |> cor()
+```
+
+A simple vista no parece que vaya a servir mucho:
+
+```{r}
+g1 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = booking_changes)) +
+        geom_boxplot()
+g2 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = log_booking_changes)) +
+        geom_boxplot()
+g1 + g2
+```
+
+Podriamos argumentar que los que tienen 0 son mas probables a cancelar,
+mientras que los que tienen 1 o mas son menos probables
+
+```{r}
+g1 <- hoteles_mod |>
+        group_by(booking_changes) |>
+        summarise(prop_cancelados = mean(num_is_canceled)) |>
+        ggplot(aes(x = booking_changes, y = prop_cancelados)) +
+        geom_point()
+
+g2 <- hoteles_mod |>
+        group_by(booking_changes) |>
+        summarise(n = n()) |>
+        ggplot(aes(x = booking_changes, y = n)) +
+        geom_point()
+g1 + g2
+```
+ Entonces, quiza podriamos hacer una indicadora (hay o no hay):
+
+  [0, 1+]
+  
+Y *hacerla interactuar* con booking_changes, o hasta solo dejar
+la indicadora.
+  
+Probamos solo para ver si tiene sentido, aunque vemos que la cuenta de casos
+no nos favorece:
+
+```{r}
+hoteles_mod |>
+   mutate(cuantil = cut(booking_changes, breaks = c(-1,0, Inf), include.lowest = T)) |>
+   select(c("cuantil", "booking_changes")) |>
+   group_by(cuantil) |>
+   summarise(porc = 100*n()/dim(hoteles_mod)[1])
+```
+
+```{r}
+hoteles_mod |>
+   mutate(cuantil = cut(booking_changes, breaks = c(-1,0), include.lowest = T)) |>
+   group_by(cuantil) |>
+   summarise(proporcion = mean(num_is_canceled)) |>
+   select(c("cuantil", "proporcion")) |>
+   ggplot(aes(x = cuantil, y = proporcion)) + geom_point()
+```
+
+#### adr 
+
+La definicion de esta variable es:
+Average Daily Rate as defined by dividing the sum of all lodging transactions by the total number of staying nights
+
+Antes de transformar a log, notamos que hay un valor negativo. Asumimos que es un error y
+lo hacemos 0.
+
+```{r}
+hoteles_mod |>
+  filter(adr < 0) |>
+  summarise(n = n())
+
+hoteles_mod$adr[hoteles_mod$adr < 0] <- 0
+```
+
+Ademas, hay un valor extremo que probablemente sesgue ligeramente el ajuste.
+
+Lo quitamos, y probablemente convenga hacer una regla de pasar al maximo a todo
+valor extremo en los de prueba, aunque vemos que no es el caso:
+
+```{r}
+cbind(
+  hoteles_mod |>
+    select(adr) |>
+    arrange(by = desc(adr)) |>
+    head(5),
+  hoteles_prueba |>
+    select(adr) |>
+    arrange(by = desc(adr)) |>
+    head(5)
+)
+
+hoteles_mod <- hoteles_mod |>
+                filter(adr < 600)
+
+```
+
+Transformando en logaritmo para ver si nos serviria mas, notamos que quiza si
+nos vaya a servir:
+
+```{r}
+hoteles_mod <- hoteles_mod |>
+                 mutate(log_adr = log(1+adr))
+
+g1 <- hoteles_mod |>
+  ggplot(aes(sample = adr)) +
+  geom_qq()
+
+g2 <- hoteles_mod |>
+  ggplot(aes(sample = log_adr)) +
+  geom_qq()
+
+g1 + g2
+```
+
+No tiene una correlacion muy alta:
+
+```{r}
+hoteles_mod |> select(c("num_is_canceled", "adr", "log_adr")) |> cor()
+```
+
+A simple vista no parece que vaya a servir mucho:
+
+```{r}
+g1 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = adr)) +
+        geom_boxplot()
+g2 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = log_adr)) +
+        geom_boxplot()
+g1 + g2
+```
+
+Haciendo pequeños multiplos, no parece haber algun rango para el cual haya diferencia:
+
+```{r}
+g1 <- hoteles_mod |>
+        mutate(cuantil = cut(adr, breaks = seq(0,550,50), include.lowest = T)) |>
+        ggplot(aes(x = adr, y = num_is_canceled)) +
+        geom_point() + 
+        facet_wrap(~cuantil) 
+
+g1
+
+```
+```{r}
+g1 <- hoteles_mod |>
+        mutate(cuantil = cut(log_adr, breaks = seq(1,551,50) |> log(), include.lowest = T)) |>
+        # group_by(adr) |>
+        # summarise(prop_cancelados = mean(num_is_canceled)) |>
+        ggplot(aes(x = log_adr, y = num_is_canceled)) +
+        geom_point() + 
+        facet_wrap(~cuantil) 
+
+g1
+
+```
+
+
+```{r}
+g1 <- hoteles_mod |>
+        mutate(cuantil = cut(adr, breaks = seq(0,550,50), include.lowest = T)) |>
+        group_by(cuantil) |>
+        summarise(prop_cancelados = mean(num_is_canceled)) |>
+        ggplot(aes(x = cuantil, y = prop_cancelados)) +
+        geom_point() 
+
+g1
+```
+```{r}
+g1 <- hoteles_mod |>
+        mutate(cuantil = cut(log_adr, breaks = seq(1,551,50) |> log(), include.lowest = T)) |>
+        group_by(cuantil) |>
+        summarise(prop_cancelados = mean(num_is_canceled)) |>
+        ggplot(aes(x = cuantil, y = prop_cancelados)) +
+        geom_point() 
+
+g1
+```
+#### babies
+
+Transformando en logaritmo para ver si nos serviria mas, notamos que quiza si
+nos vaya a servir:
+
+```{r}
+hoteles_mod <- hoteles_mod |>
+                 mutate(log_babies = log(1+babies))
+
+g1 <- hoteles_mod |>
+  ggplot(aes(sample = babies)) +
+  geom_qq()
+
+g2 <- hoteles_mod |>
+  ggplot(aes(sample = log_babies)) +
+  geom_qq()
+
+g1 + g2
+```
+
+No tiene una correlacion muy alta:
+
+```{r}
+hoteles_mod |> select(c("num_is_canceled", "babies")) |> cor()
+```
+
+A simple vista no parece que vaya a servir mucho:
+
+```{r}
+g1 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = babies)) +
+        geom_boxplot()
+
+g1
+```
+
+```{r}
+g1 <- hoteles_mod |>
+        group_by(babies) |>
+        summarise(prop_cancelados = mean(num_is_canceled)) |>
+        ggplot(aes(x = babies, y = prop_cancelados)) +
+        geom_point()
+
+g2 <- hoteles_mod |>
+        group_by(babies) |>
+        summarise(n = n()) |>
+        ggplot(aes(x = babies, y = n)) +
+        geom_point()
+g1 + g2
+```
+
+```{r}
+hoteles_mod |>
+   mutate(cuantil = cut(babies, breaks = c(-1,0, Inf), include.lowest = T)) |>
+   select(c("cuantil", "babies")) |>
+   group_by(cuantil) |>
+   summarise(porc = 100*n()/dim(hoteles_mod)[1])
+```
+
+#### children
+
+Transformando en logaritmo para ver si nos serviria mas, notamos que quiza si
+nos vaya a servir:
+
+```{r}
+hoteles_mod <- hoteles_mod |>
+                 mutate(log_children = log(1+children))
+
+g1 <- hoteles_mod |>
+  ggplot(aes(sample = children)) +
+  geom_qq()
+
+g2 <- hoteles_mod |>
+  ggplot(aes(sample = log_children)) +
+  geom_qq()
+
+g1 + g2
+```
+
+No tiene una correlacion muy alta:
+
+```{r}
+hoteles_mod |> select(c("num_is_canceled", "children")) |> cor()
+```
+
+A simple vista no parece que vaya a servir mucho:
+
+```{r}
+g1 <- hoteles_mod |>
+        ggplot(aes(x = is_canceled, y = children)) +
+        geom_boxplot()
+
+g1
+```
+
+```{r}
+g1 <- hoteles_mod |>
+        group_by(children) |>
+        summarise(prop_cancelados = mean(num_is_canceled)) |>
+        ggplot(aes(x = children, y = prop_cancelados)) +
+        geom_point()
+
+g2 <- hoteles_mod |>
+        group_by(children) |>
+        summarise(n = n()) |>
+        ggplot(aes(x = children, y = n)) +
+        geom_point()
+g1 + g2
+```
+
+```{r}
+hoteles_mod |>
+   mutate(cuantil = cut(children, breaks = c(-1,0,1,2,3, Inf), include.lowest = T)) |>
+   select(c("cuantil", "children")) |>
+   group_by(cuantil) |>
+   summarise(porc = 100*n()/dim(hoteles_mod)[1])
+```
+
+### Categoricas
+
+#### country
+
+```{r}
+# the most common countries
+cc <- c('PRT', 'GBR', 'FRA', 'ESP', 'DEU', 'ITA', 'IRL', 'BEL','NLD', 'BRA', 'USA', 'CHE')
+
+hoteles_mod |>
+  group_by(country) |>
+  summarise(n = n(),
+            porc = 100*n()/dim(hoteles_mod)[1],
+            prop_cancel = 100*mean(num_is_canceled)) |>
+  arrange(desc(porc)) |>
+  filter(n > 0.01*dim(hoteles_mod)[1])
+```
+```{r}
+new_cc <- hoteles_mod |>
+            group_by(country) |>
+            summarise(n = n(),
+                      porc = 100*n()/dim(hoteles_mod)[1],
+                      prop_cancel = 100*mean(num_is_canceled)) |>
+            arrange(desc(porc)) |>
+            filter(n > 0.01*dim(hoteles_mod)[1]) |>
+            pull(country)
+
+aux <- hoteles_mod |>
+        filter(country %in% new_cc == FALSE ) |>
+        group_by(country) |>
+        summarise(n = n(),
+                  porc = 100*n()/dim(hoteles_mod)[1],
+                  prop_cancel = 100*mean(num_is_canceled)) |>
+        arrange(desc(prop_cancel)) |>
+        filter(n > 0.001*dim(hoteles_mod)[1])
+
+new_cc_buenos <- aux |>
+                  filter(prop_cancel < 45) |>
+                   pull(country)
+
+hoteles_mod <- hoteles_mod |>
+                mutate(mod_country = ifelse(country %in% new_cc == TRUE, country, 
+                                          ifelse(country %in% new_cc_buenos == TRUE, "BUENO", "otros")))
+```
+
+#### agent
+
+```{r}
+# the most common agents
+ca <- c('9', 'NULL', '240', '1', '6', '7', '14', '250', '28','3', '8', '241', '37')
+
+hoteles_mod |>
+  group_by(agent) |>
+  summarise(n = n(),
+            porc = 100*n()/dim(hoteles_mod)[1],
+            prop_cancel = 100*mean(num_is_canceled)) |>
+  arrange(desc(porc)) |>
+  filter(n > 0.01*dim(hoteles_mod)[1])
+```
+
+
+```{r}
+new_ca <- hoteles_mod |>
+            group_by(agent) |>
+            summarise(n = n(),
+                      porc = 100*n()/dim(hoteles_mod)[1],
+                      prop_cancel = 100*mean(num_is_canceled)) |>
+            arrange(desc(porc)) |>
+            filter(n > 0.01*dim(hoteles_mod)[1]) |>
+            pull(agent)
+
+aux <- hoteles_mod |>
+        filter(agent %in% new_cc == FALSE ) |>
+        group_by(agent) |>
+        summarise(n = n(),
+                  porc = 100*n()/dim(hoteles_mod)[1],
+                  prop_cancel = 100*mean(num_is_canceled)) |>
+        arrange(desc(prop_cancel)) |>
+        filter(n > 0.001*dim(hoteles_mod)[1])
+
+new_ca_buenos <- aux |>
+                  filter(prop_cancel < 40) |>
+                   pull(agent)
+new_ca_malos <- aux |>
+                  filter(prop_cancel > 60) |>
+                   pull(agent)
+
+hoteles_mod <- hoteles_mod |>
+                mutate(mod_agent = ifelse(agent %in% new_ca == TRUE, agent, 
+                                          ifelse(agent %in% new_ca_buenos == TRUE, "BUENO", 
+                                          ifelse(agent %in% new_ca_malos == TRUE, "MALO","otros"))))
+```
+
+
+#### company
+
+```{r}
+# the most common companies
+ccs <- c('NULL', '40', '223', '67', '45', '281', '174', '153', '219', '154', '223')
+
+hoteles_mod |>
+  group_by(company) |>
+  summarise(n = n(),
+            porc = 100*n()/dim(hoteles_mod)[1],
+            prop_cancel = 100*mean(num_is_canceled)) |>
+  arrange(desc(porc)) |>
+  filter(n > 0.005*dim(hoteles_mod)[1])
+```
+```{r}
+new_ccs <- hoteles_mod |>
+            group_by(company) |>
+            summarise(n = n(),
+                      porc = 100*n()/dim(hoteles_mod)[1],
+                      prop_cancel = 100*mean(num_is_canceled)) |>
+            arrange(desc(porc)) |>
+            filter(n > 0.01*dim(hoteles_mod)[1]) |>
+            pull(company)
+
+aux <- hoteles_mod |>
+        filter(company %in% new_ccs == FALSE ) |>
+        group_by(company) |>
+        summarise(n = n(),
+                  porc = 100*n()/dim(hoteles_mod)[1],
+                  prop_cancel = 100*mean(num_is_canceled)) |>
+        arrange(desc(prop_cancel)) |>
+        filter(n > 0.0005*dim(hoteles_mod)[1])
+
+new_ccs_buenos <- aux |>
+                  filter(prop_cancel < 40) |>
+                   pull(company)
+
+hoteles_mod <- hoteles_mod |>
+                mutate(mod_company = ifelse(company %in% new_ccs == TRUE, agent, 
+                                          ifelse(company %in% new_ccs_buenos == TRUE, "BUENO","otros")))
+```
+
+
+#### meal
+
+Nada que hacer mas que convertir a dummy. No parece muy indicativa.
+
+```{r}
+hoteles_mod |>
+  group_by(meal) |>
+  summarise(n = n(),
+            prop_cancel = 100*mean(num_is_canceled))
+```
+
+#### market_segment
+
+Quiza pasar Aviation y Undefined a otros, o igual solo dejarla asi.
+
+```{r}
+hoteles_mod |>
+  group_by(market_segment) |>
+  summarise(n = n(),
+            prop_cancel = 100*mean(num_is_canceled))
+```
+
+#### distribution_channel
+
+Quiza pasar GDS y Undefined a otros, o igual solo dejarla asi.
+
+```{r}
+hoteles_mod |>
+  group_by(distribution_channel) |>
+  summarise(n = n(),
+            prop_cancel = 100*mean(num_is_canceled))
+```
+
+#### assigned_room_type
+
+Hay muy buenas proporciones. Quiza solo pasar la L y P a otros
+
+```{r}
+hoteles_mod |>
+  group_by(assigned_room_type) |>
+  summarise(n = n(),
+            prop_cancel = 100*mean(num_is_canceled))
+```
+```{r}
+hoteles |> 
+  pull(assigned_room_type) |> 
+  levels()
+```
+```{r}
+hoteles |> 
+  filter(assigned_room_type == "B") |>
+  pull(assigned_room_type) |> 
+  levels()
+```
+
+#### customer_type
+
+Nada por hacer.
+
+```{r}
+hoteles_mod |>
+  group_by(customer_type) |>
+  summarise(n = n(),
+            prop_cancel = 100*mean(num_is_canceled))
+```
+
+#### deposit_type
+
+Nada por hacer. Esta muy raro que en Non Refund practicamente todos
+cancelan, la intuicion diria que esto va al reves.
+
+```{r}
+hoteles_mod |>
+  group_by(deposit_type) |>
+  summarise(n = n(),
+            prop_cancel = 100*mean(num_is_canceled))
+```
+
+```{r}
+hoteles_mod
+```
+
+```{r}
+hoteles_ent |>
+  group_by(country) |>
+  summarise(n = n())
+```
+
+```{r}
+hoteles_prueba |>
+  group_by(country) |>
+  summarise(n = n())
+```
+
+```{r}
+hoteles_ent |>
+  pull(country) |>
+  levels()
+```
+
+```{r}
+hoteles_prueba |>
+  pull(country) |>
+  levels()
+```
+
+```{r}
+hoteles_prueba
+```
+

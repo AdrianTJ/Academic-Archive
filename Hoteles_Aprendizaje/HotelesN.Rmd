@@ -1,0 +1,213 @@
+---
+title: "Hoteles Kaggle"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# set.seed(823)
+
+library(tidyverse)
+library(tidymodels)
+library(rsample)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Proyecto Aprendizaje de Maquina - Hoteles Kaggle
+
+```{r}
+hoteles <- read.csv("Datos/entrena.csv") %>%
+  mutate(arrival_date_month = factor(arrival_date_month),
+         is_repeated_guest = factor(is_repeated_guest),
+         customer_type = factor(customer_type),
+         hotel = factor(hotel),
+         arrival_date_year = factor(arrival_date_year),
+         arrival_date_week_number = factor(arrival_date_week_number),
+         deposit_type = factor(deposit_type),
+         assigned_room_type = factor(assigned_room_type),
+         distribution_channel = factor(distribution_channel),
+         market_segment = factor(market_segment),
+         meal = factor(meal),
+         days_in_waiting_list=log(days_in_waiting_list+1E-16),
+         booking_changes=log(booking_changes+1E-16)) 
+
+hoteles$children[is.na(hoteles$children)] <- 0 # Si ninios es NA entonces se va a 0 (la mediana), solo hay 4 NA. 
+
+# the most common countries
+cc <- c('PRT', 'NULL', 'GBR', 'FRA', 'ESP', 'DEU', 'ITA', 'IRL', 'BEL','NLD', 'BRA', 'USA', 'CHE')
+# the most common agents
+ca <- c('9', 'NULL', '240', '1', '6', '7', '14', '250', '28','3', '8', '241', '37')
+# the most common companies
+ccs <- c('NULL', '40', '223', '67', '45', '281', '174', '153', '219', '154', '223')
+
+for (i in 1:length(hoteles$country)){
+if(hoteles$country[i] %in% cc == FALSE){
+  hoteles$country[i] <- 'otros'
+}}
+
+for (i in 1:length(hoteles$agent)){
+if(hoteles$agent[i] %in% ca == FALSE){
+  hoteles$agent[i] <- 'otros'
+}}
+
+for (i in 1:length(hoteles$company)){
+if(hoteles$company[i] %in% ccs == FALSE){
+  hoteles$company[i] <- 'otros'
+}}
+
+hoteles <- hoteles %>%
+  mutate(country = factor(country), agent = factor(agent), company = factor(company)) 
+
+# prueba factor, 62 niveles si a lo mejor acepta hasta 60 niveles 
+```
+
+```{r}
+set.seed(11283)
+hoteles_split = initial_split(hoteles, prop = 0.70)
+hoteles_ent <- training(hoteles_split)
+```
+
+```{r}
+receta_hoteles <- recipe(is_canceled ~ lead_time + 
+                                       stays_in_weekend_nights +
+                                       stays_in_week_nights +
+                                       adults +
+                                       children +
+                                       babies +
+                                       previous_cancellations +
+                                       previous_bookings_not_canceled +
+                                       booking_changes +
+                                       days_in_waiting_list +
+                                       adr +
+                                       total_of_special_requests +
+                                       required_car_parking_spaces + # aqui nominales
+                                       is_repeated_guest +
+                                       customer_type +
+                                       hotel +
+                                       arrival_date_year +
+                                       arrival_date_month +
+                                       arrival_date_week_number +
+                                       meal +
+                                       market_segment +
+                                       distribution_channel +
+                                       assigned_room_type +
+                                       deposit_type +
+                                       country +
+                                       agent +
+                                       company,
+           data = hoteles_ent) %>% 
+  step_novel(country,agent) %>% # nuevos en categoria nueva 
+  step_unknown(country,agent) %>% #faltantes en categoria nueva ?
+  step_dummy(is_repeated_guest,customer_type,hotel,arrival_date_year,arrival_date_month,arrival_date_week_number,meal,market_segment,distribution_channel,assigned_room_type,deposit_type,country,agent, company) #%>%
+#step_interact(terms = ~ starts_with("arrival_date_week_number"):starts_with("arrival_date_year")) #%>%
+  #step_nzv(all_predictors(), freq_cut = 500 / 1, unique_cut = 1)
+```
+
+```{r}
+#mixture = 0.25, penalty = 0.0003593814
+modelo_logistico <- 
+  logistic_reg(mixture = 0.25, penalty = 0.0003593814) %>% 
+  set_args(lambda.min_ratio = 1e-18) %>% 
+  set_engine("glmnet") %>% 
+  set_mode("classification")
+```
+
+```{r}
+flujo <- workflow() %>% add_recipe(receta_hoteles) %>% 
+  add_model(modelo_logistico) 
+flujo_ajustado <- fit(flujo, hoteles_ent)
+```
+
+```{r}
+modelo_ajustado <- flujo_ajustado %>% extract_fit_parsnip()
+coeficientes_tbl <- modelo_ajustado %>% tidy() %>% 
+  pivot_wider(names_from = term, values_from = estimate) %>% 
+  select(-penalty)
+```
+
+```{r}
+coeficientes_tbl
+# library(gt)
+# flujo_ajustado %>% pull_workflow_fit() %>% broom::tidy() %>%
+#   mutate(across(where(is.numeric), round, 2)) %>%
+#   select(term, estimate) %>%
+#   gt()
+```
+
+```{r}
+conjunto_wfs <- workflow_set(
+  preproc = list(receta_base = receta_hoteles),
+  models = list(reg_logistica = modelo_logistico),
+  cross = FALSE
+)
+```
+
+
+
+```{r}
+val_split <- manual_rset(hoteles_split %>% list(), "validacion")
+mis_metricas <- metric_set(mn_log_loss, accuracy)
+resultados <- conjunto_wfs %>% 
+  workflow_map("fit_resamples", resamples = val_split, 
+               metrics = mis_metricas)
+
+resultados %>% select(wflow_id, result) %>% 
+  unnest(result) %>% unnest(.metrics)
+```
+
+
+
+```{r}
+modelo_final <- flujo_ajustado
+hoteles_prueba <- read.csv("Datos/prueba.csv") %>%
+  mutate(arrival_date_month = factor(arrival_date_month),
+         is_repeated_guest = factor(is_repeated_guest),
+         customer_type = factor(customer_type),
+         hotel = factor(hotel),
+         arrival_date_year = factor(arrival_date_year),
+         arrival_date_week_number = factor(arrival_date_week_number),
+         deposit_type = factor(deposit_type),
+         assigned_room_type = factor(assigned_room_type),
+         distribution_channel = factor(distribution_channel),
+         market_segment = factor(market_segment),
+         meal = factor(meal),
+         days_in_waiting_list=log(days_in_waiting_list+1E-16),
+         booking_changes=log(booking_changes+1E-16)) 
+
+hoteles_prueba$children[is.na(hoteles_prueba$children)] <- 0 # Si ninios es NA entonces se va a 0 (la mediana), solo hay 4 NA. 
+
+# the most common countries
+cc <- c('PRT', 'NULL', 'GBR', 'FRA', 'ESP', 'DEU', 'ITA', 'IRL', 'BEL','NLD', 'BRA', 'USA', 'CHE')
+# the most common agents
+ca <- c('9', 'NULL', '240', '1', '6', '7', '14', '250', '28','3', '8', '241', '37')
+# the most common companies
+ccs <- c('NULL', '40', '223', '67', '45', '281', '174', '153', '219', '154', '223')
+
+for (i in 1:length(hoteles_prueba$country)){
+if(hoteles_prueba$country[i] %in% cc == FALSE){
+  hoteles_prueba$country[i] <- 'otros'
+}}
+
+for (i in 1:length(hoteles_prueba$agent)){
+if(hoteles_prueba$agent[i] %in% ca == FALSE){
+  hoteles_prueba$agent[i] <- 'otros'
+}}
+
+for (i in 1:length(hoteles_prueba$company)){
+if(hoteles_prueba$company[i] %in% ccs == FALSE){
+  hoteles_prueba$company[i] <- 'otros'
+}}
+
+hoteles_prueba <- hoteles_prueba %>%
+  mutate(country = factor(country), agent = factor(agent), company = factor(company))
+submission <- tibble(id = hoteles_prueba$id, prob = predict(modelo_final, hoteles_prueba, type = "prob")$.pred_cancelado )
+```
+
+```{r}
+ write.table(submission , file = "submission_1.csv", row.names = FALSE, sep = ",")
+```
+
+```{r}
+hist(submission$prob)
+```
+

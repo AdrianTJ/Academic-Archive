@@ -1,0 +1,132 @@
+---
+title: "Hoteles Kaggle"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# set.seed(823)
+
+library(tidyverse)
+library(tidymodels)
+library(rsample)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Proyecto Aprendizaje de Máquina - Hoteles Kaggle
+
+```{r}
+sample_submission <- read.csv("Datos/sample_submission.csv")
+```
+
+```{r}
+hoteles <- read.csv("Datos/entrena.csv") |>
+  mutate(arrival_date_month = factor(arrival_date_month), 
+         arrival_date_year = factor(arrival_date_year),
+         meal = factor(meal) ,
+         market_segment = factor(market_segment),
+         is_repeated_guest = factor(is_repeated_guest),
+         distribution_channel = factor(distribution_channel),
+         deposit_type = factor(deposit_type),
+         customer_type = factor(customer_type),
+         reserved_room_type = factor(reserved_room_type),
+         assigned_room_type = factor(assigned_room_type), 
+         hotel = factor(hotel))
+
+hoteles$children[is.na(hoteles$children)] <- 0 # Si niños es NA entonces se va a 0 (la mediana). 
+```
+
+```{r}
+hoteles_split = initial_split(hoteles, prop = 0.7)
+hoteles_split
+```
+
+```{r}
+hoteles_ent <- training(hoteles_split)
+hoteles_ent |> count(is_canceled)
+```
+
+```{r}
+receta_hoteles <- recipe(is_canceled ~ stays_in_week_nights + 
+                                       adults + 
+                                       children + 
+                                       babies + 
+                                       booking_changes + 
+                                       lead_time + 
+                                       stays_in_weekend_nights + 
+                                       arrival_date_month + 
+                                       arrival_date_year + 
+                                       adr + 
+                                       total_of_special_requests + 
+                                       meal +
+                                       market_segment + 
+                                       is_repeated_guest +
+                                       distribution_channel + 
+                                       deposit_type + 
+                                       customer_type + 
+                                       previous_cancellations +
+                                       previous_bookings_not_canceled,
+                          data = hoteles_ent) |>
+                          step_dummy(all_nominal(), -is_canceled) |>
+                          step_normalize(all_numeric_predictors()) 
+```
+
+```{r}
+modelo_logistico <- 
+rand_forest(trees = 100, mode = "classification") |>
+set_engine("ranger")
+```
+
+```{r}
+flujo <- workflow() |> add_recipe(receta_hoteles) |> 
+  add_model(modelo_logistico) 
+flujo_ajustado <- fit(flujo, hoteles_ent)
+```
+
+```{r}
+modelo_ajustado <- flujo_ajustado |> extract_fit_parsnip()
+```
+
+```{r}
+conjunto_wfs <- workflow_set(
+  preproc = list(receta_base = receta_hoteles),
+  models = list(reg_logistica = modelo_logistico),
+  cross = FALSE
+)
+```
+
+```{r}
+val_split <- manual_rset(hoteles_split |> list(), "validación")
+mis_metricas <- metric_set(mn_log_loss, accuracy)
+resultados <- conjunto_wfs |> 
+  workflow_map("fit_resamples", resamples = val_split, 
+               metrics = mis_metricas)
+
+resultados |> select(wflow_id, result) |> 
+  unnest(result) |> unnest(.metrics)
+```
+
+```{r}
+modelo_final <- flujo_ajustado
+
+hoteles_prueba <- read.csv("Datos/prueba.csv") |>
+  mutate(arrival_date_month = factor(arrival_date_month), 
+         arrival_date_year = factor(arrival_date_year),
+         meal = factor(meal) ,
+         market_segment = factor(market_segment),
+         is_repeated_guest = factor(is_repeated_guest),
+         distribution_channel = factor(distribution_channel),
+         deposit_type = factor(deposit_type),
+         customer_type = factor(customer_type),
+         reserved_room_type = factor(reserved_room_type),
+         assigned_room_type = factor(assigned_room_type), 
+         hotel = factor(hotel))
+
+submission <- tibble(id = hoteles_prueba$id, prob = predict(modelo_final, hoteles_prueba, type = "prob")$.pred_cancelado )
+```
+
+```{r}
+write.table(submission , file = "submission_1.csv", row.names = FALSE, sep = ",")
+```
+
+

@@ -1,0 +1,227 @@
+---
+title: "MARS_Aprendizaje"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+set.seed(1286)
+
+library(tidyverse)
+library(tidymodels)
+library(earth)
+library(latex2exp)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Proyecto Aprendizaje de Máquina - MARS (Multivariate Adaptive Regression Splines)
+
+### Exploración del Modelo
+
+Supongamos que sabemos como han sido generado los datos para un caso simple:
+
+$$ y = -\frac{1}{20}x^4 +\frac{1}{2}x^3 + \frac{1}{2}x^2 - 10x + \epsilon$$
+
+con $\epsilon \sim N(0, 1)$.
+
+Simulamos los datos y graficamos el polinomio exacto junto con el ruido:
+
+```{r, fig.width = 10, fig.height = 5}
+x <- seq(-5, 10, .1)
+y <- -0.05*x^4 + 0.5*x^3 + 0.5*x^2 - 10*x 
+z <- rnorm(length(x), sd = 10)
+
+ejemplo_1 <- tibble(x = x, y = y, sims = y + z)
+
+ejemplo_1 |>
+  ggplot() +
+  geom_line(aes(x = x, y = y), color = "black", size = 1, alpha = 0.8) +
+  geom_point(aes(x = x, y = sims), alpha = 0.2, size = 3, shape = 16, stroke = 0) +
+  ggtitle(TeX(r'($y = -\frac{1}{20}x^4 +\frac{1}{2}x^3 + \frac{1}{2}x^2 - 10x + \epsilon$)')) + 
+  theme_classic()
+```
+
+Ajustando MARS tendríamos:
+
+```{r, fig.width = 10, fig.height = 5}
+n <- 2
+
+mars_1.1 <- earth(
+  sims ~ x,  
+  data = ejemplo_1,
+  nprune = n+1,
+  degree = n,
+  )
+
+preds <- predict(mars_1.1, ejemplo_1)
+
+ejemplo_1 |>
+  mutate(preds = preds) |>
+  ggplot() +
+  # geom_vline(xintercept = c(-2.3, 3.7, 6.9, 8.5), color = "black", size = 1, alpha = 0.5) +
+  geom_line(aes(x = x, y = y), color = "black", size = 1, alpha = 0.5) +
+  geom_point(aes(x = x, y = sims), alpha = 0.2, size = 3, shape = 16, stroke = 0) +
+  geom_line(aes(x = x, y = preds), color = "darkblue", size = 1.5) + 
+  ggtitle(paste("MARS con",n,"nodos")) + 
+  theme_classic()
+```
+
+```{r, fig.width = 10, fig.height = 5}
+n <- 3
+
+mars_1.1 <- earth(
+  sims ~ x,  
+  data = ejemplo_1,
+  nprune = n+1,
+  degree = n,
+  )
+
+preds <- predict(mars_1.1, ejemplo_1)
+
+ejemplo_1 |>
+  mutate(preds = preds) |>
+  ggplot() +
+  # geom_vline(xintercept = c(-2.3, 3.7, 6.9, 8.5), color = "black", size = 1, alpha = 0.5) +
+  geom_line(aes(x = x, y = y), color = "black", size = 1, alpha = 0.5) +
+  geom_point(aes(x = x, y = sims), alpha = 0.2, size = 3, shape = 16, stroke = 0) +
+  geom_line(aes(x = x, y = preds), color = "darkblue", size = 1.5) + 
+  ggtitle(paste("MARS con",n,"nodos")) + 
+  theme_classic()
+```
+
+```{r, fig.width = 10, fig.height = 5}
+n <- 4
+
+mars_1.1 <- earth(
+  sims ~ x,  
+  data = ejemplo_1,
+  nprune = n+1,
+  degree = n,
+  )
+
+preds <- predict(mars_1.1, ejemplo_1)
+
+ejemplo_1 |>
+  mutate(preds = preds) |>
+  ggplot() +
+  # geom_vline(xintercept = c(-2.3, 3.7, 6.9, 8.5), color = "black", size = 1, alpha = 0.5) +
+  geom_line(aes(x = x, y = y), color = "black", size = 1, alpha = 0.5) +
+  geom_point(aes(x = x, y = sims), alpha = 0.2, size = 3, shape = 16, stroke = 0) +
+  geom_line(aes(x = x, y = preds), color = "darkblue", size = 1.5) + 
+  ggtitle(paste("MARS con",n,"nodos")) + 
+  theme_classic()
+```
+
+```{r}
+mars_1 <- earth(
+  sims ~ x,  
+  data = ejemplo_1
+  )
+
+
+summary(mars_1) %>% .$coefficients %>% head(10)
+```
+
+```{r}
+plot(mars_1, which = 1)
+```
+
+```{r}
+
+genera_mars <- function(datos, nprune){
+  
+  modelo_mars <- earth(
+  sims ~ x,  
+  data = datos,
+  nprune = nprune+1,
+  degree = nprune,
+  )
+  
+  preds <- predict(modelo_mars, datos)
+  preds
+
+}
+
+# Copiamos la estructura del tibble ejemplo_1
+ejemplo_2 <- tibble(ejemplo_1)
+ejemplo_2 <- ejemplo_2[-c(1:dim(ejemplo_1)[1]),]
+
+# Número de knots que queremos
+Nprunes = 4
+
+aux <- c()
+for (nprune in 1:Nprunes){
+  aux = c(aux, genera_mars(ejemplo_1, nprune))
+  ejemplo_2 = rbind(ejemplo_2, tibble(ejemplo_1))
+}
+
+ejemplo_2 |> 
+  mutate(nprune = rep(seq(1:Nprunes), dim(ejemplo_1)[1]) |> sort()) |>
+  mutate(preds = aux) |>
+  filter(nprune %in% c(2, 3, 4)) |>
+  ggplot() +
+  geom_line(aes(x = x, y = y), color = "black", size = 1, alpha = 0.5) +
+  geom_point(aes(x = x, y = sims), alpha = 0.2, size = 3, shape = 16, stroke = 0) +
+  geom_line(aes(x = x, y = preds, group = nprune, color = nprune), size = 1.5) +
+  ggtitle("MARS con distintos nodos") + 
+  theme_classic()
+
+```
+```{r}
+corte_h_1 <- 3
+ejemplo_3 <- tibble(ejemplo_1) |>
+  mutate(h_11 = (corte_h_1 - x)* as.numeric(x < corte_h_1),
+         h_12 = -(corte_h_1 - x)* as.numeric(x > corte_h_1))
+
+modelo_mars_manual <- lm(
+  sims ~ h_11 + h_12,  
+  data = ejemplo_3,
+  )
+
+preds <- predict(modelo_mars_manual, ejemplo_3)
+
+ejemplo_3 |>
+  mutate(preds = preds) |>
+  ggplot() +
+  # geom_vline(xintercept = c(-2.3, 3.7, 6.9, 8.5), color = "black", size = 1, alpha = 0.5) +
+  geom_line(aes(x = x, y = y), color = "black", size = 1, alpha = 0.5) +
+  geom_point(aes(x = x, y = sims), alpha = 0.2, size = 3, shape = 16, stroke = 0) +
+  geom_line(aes(x = x, y = preds), color = "darkblue", size = 1.5) + 
+  ggtitle(paste("MARS 2 nodos, eligiendo corte(s)")) + 
+  theme_classic()
+```
+```{r}
+corte_h_1 <- -2
+corte_h_2 <- 7
+ejemplo_4 <- tibble(ejemplo_1) |>
+  mutate(h_11 = (corte_h_1 - x)* as.numeric(x < corte_h_1),
+         h_12 = -(corte_h_1 - x)* as.numeric(x > corte_h_1),
+         h_21 = (corte_h_2 - x)* as.numeric(x < corte_h_2),
+         h_22 = -(corte_h_2 - x)* as.numeric(x > corte_h_2))
+
+modelo_mars_manual <- lm(
+  sims ~ h_11 + h_12 + h_21 + h_22,  
+  data = ejemplo_4,
+  )
+
+preds <- predict(modelo_mars_manual, ejemplo_4)
+
+ejemplo_4 |>
+  mutate(preds = preds) |>
+  ggplot() +
+  # geom_vline(xintercept = c(-2.3, 3.7, 6.9, 8.5), color = "black", size = 1, alpha = 0.5) +
+  geom_line(aes(x = x, y = y), color = "black", size = 1, alpha = 0.5) +
+  geom_point(aes(x = x, y = sims), alpha = 0.2, size = 3, shape = 16, stroke = 0) +
+  geom_line(aes(x = x, y = preds), color = "darkblue", size = 1.5) + 
+  ggtitle(paste("MARS 3 nodos, eligiendo corte(s)")) + 
+  theme_classic()
+```
+
+
+### Ejemplo con spam
+
+```{r}
+spam_entrena <- read.csv("datos/spam-entrena.csv")
+spam_prueba <- read.csv("datos/spam-prueba.csv")
+```
+

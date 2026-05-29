@@ -1,0 +1,560 @@
+---
+title: "Multivariate Adaptive Regression Splines"
+author: "Calvo, Gil, Tame"
+date: "11/28/2021"
+output: 
+  beamer_presentation:
+    theme: "Boadilla"
+    colortheme: "seahorse"
+---
+
+```{r, warning=FALSE, echo=FALSE, message = FALSE}
+# Semilla
+set.seed(1286)
+
+# Importamos librerias
+
+library(tidyverse)
+library(tidymodels)
+library(earth)
+library(caret)
+library(latex2exp)
+library(patchwork)
+```
+
+## Introducción y Relevancia
+
+El modelo MARS es un algoritmo de aprendizaje supervisado que funciona para regresión y clasificación. Es una versión generalizada de regresión lineal a pedazos [6], en el cual el modelo permite hacer diferentes pendientes para diferentes partes de la variable a estimar en función de las variables predictoras, y automáticamente modela términos no lineales e interacciones entre variables. Fue introducido originalmente en [1] por Friedman en 1991, y existen varias implementaciones del algoritmo, generalmente bajo el nombre de "Earth" [8].  
+
+## Comportamiento del Modelo
+
+MARS busca los puntos de corte y las pendientes óptimas para aproximar a la variable objetivo. Se puede apreciar como en diferentes segmentos de la variable $x$ existen pedazos de funciones lineales con diferentes pendientes.
+
+```{r, fig.width = 10, fig.height = 5, echo=FALSE}
+x <- seq(-5, 10, .1)
+y <- -0.05*x^4 + 0.5*x^3 + 0.5*x^2 - 10*x 
+z <- rnorm(length(x), sd = 10)
+
+ejemplo_1 <- tibble(x = x, y = y, sims = y + z)
+
+g1 <- ejemplo_1 |>
+  ggplot() +
+  geom_line(aes(x = x, y = y), color = "black", size = 1, alpha = 0.8) +
+  geom_point(aes(x = x, y = sims), alpha = 0.2, size = 3, shape = 16, stroke = 0) +
+  ggtitle(TeX(r'($y = -\frac{1}{20}x^4 +\frac{1}{2}x^3 + \frac{1}{2}x^2 - 10x + \epsilon$)')) + 
+  theme_classic()
+```
+
+```{r, fig.width = 10, fig.height = 5, echo=FALSE}
+n <- 4
+
+mars_1.1 <- earth(
+  sims ~ x,  
+  data = ejemplo_1,
+  nprune = n+1,
+  degree = n,
+  )
+
+preds <- predict(mars_1.1, ejemplo_1)
+
+g2 <- ejemplo_1 |>
+  mutate(preds = preds) |>
+  ggplot() +
+  # geom_vline(xintercept = c(-2.3, 3.7, 6.9, 8.5), color = "black", size = 1, alpha = 0.5) +
+  geom_line(aes(x = x, y = y), color = "black", size = 1, alpha = 0.5) +
+  geom_point(aes(x = x, y = sims), alpha = 0.2, size = 3, shape = 16, stroke = 0) +
+  geom_line(aes(x = x, y = preds), color = "darkblue", size = 1.5) + 
+  ggtitle(paste("MARS con",n,"nodos")) + 
+  theme_classic()
+```
+
+```{r, fig.width = 10, fig.height = 5, echo=FALSE}
+g1 + g2
+```
+
+## Comportamiento del Modelo
+
+Como podemos ver, darnos a la tarea de encontrar manualmente cada punto de corte y pendientes óptimas se puede traducir a minimizar alguna métrica como el error cuadrático medio, o análoigamente, maximizar la $R^2$:
+
+```{r, fig.width = 10, fig.height = 5, warning=FALSE, echo=FALSE, message = FALSE}
+x <- seq(-10, 10, .1)
+y <- -0.1*x^3+ 10*x
+z <- rnorm(length(x), sd = 20)
+
+ejemplo_2 <- tibble(x = x, y = y, sims = y + z)
+```
+
+```{r, fig.width = 5, fig.height = 5,warning=FALSE, echo=FALSE, message = FALSE}
+cutoff <- -5
+linea_izquierda <- (-110 - 10*x)*ifelse(x <= cutoff, 1, NA)
+linea_derecha <- (-25 + 7*x)*ifelse(x >= cutoff, 1, NA)
+
+ejemplo_2 <- tibble(x = x,
+                    y = y,
+                    sims = y + z,
+                    linea_derecha = linea_derecha, 
+                    linea_izquierda = linea_izquierda, 
+                    residuales_derecha = sims - linea_derecha,
+                    residuales_izquierda = sims - linea_izquierda,
+                    residuales_derecha_top = ifelse(residuales_derecha > 0, residuales_derecha, 0),
+                    residuales_izquierda_top = ifelse(residuales_izquierda > 0, residuales_izquierda, 0),
+                    residuales_derecha_bot = ifelse(residuales_derecha < 0, residuales_derecha, 0),
+                    residuales_izquierda_bot = ifelse(residuales_izquierda < 0, residuales_izquierda, 0),
+                    )
+
+g1 <- ejemplo_2 |>
+  ggplot() +
+  geom_point(aes(x = x, y = sims), alpha = 0.2, size = 2, shape = 16, stroke = 0) +
+  geom_vline(xintercept = cutoff, size = 1, color = "darkblue") +
+  geom_line(aes(x = x, y = linea_izquierda), color = "blue", size = 1, alpha = 0.8) +
+  geom_line(aes(x = x, y = linea_derecha), color = "blue", size = 1, alpha = 0.8) +
+  geom_linerange(aes(x = x, ymax = residuales_derecha_top,  ymin = residuales_derecha_bot),
+                alpha = 0.3, size = 1, shape = 16, stroke = 0, color = "red") +
+  geom_linerange(aes(x = x, ymax = residuales_izquierda_top,  ymin = residuales_izquierda_bot),
+                alpha = 0.3, size = 1, shape = 16, stroke = 0, color = "red") +
+  ylab("y") + xlab("x") +
+  theme_classic()
+```
+
+```{r, fig.width = 5, fig.height = 5, warning=FALSE, echo=FALSE, message = FALSE}
+cutoff <- 0
+linea_izquierda <- (-30 - 1*x)*ifelse(x <= cutoff, 1, NA)
+linea_derecha <- (-30 + 10*x)*ifelse(x >= cutoff, 1, NA)
+
+ejemplo_2 <- tibble(x = x,
+                    y = y,
+                    sims = y + z,
+                    linea_derecha = linea_derecha, 
+                    linea_izquierda = linea_izquierda, 
+                    residuales_derecha = sims - linea_derecha,
+                    residuales_izquierda = sims - linea_izquierda,
+                    residuales_derecha_top = ifelse(residuales_derecha > 0, residuales_derecha, 0),
+                    residuales_izquierda_top = ifelse(residuales_izquierda > 0, residuales_izquierda, 0),
+                    residuales_derecha_bot = ifelse(residuales_derecha < 0, residuales_derecha, 0),
+                    residuales_izquierda_bot = ifelse(residuales_izquierda < 0, residuales_izquierda, 0),
+                    )
+
+g2 <- ejemplo_2 |>
+  ggplot() +
+  geom_point(aes(x = x, y = sims), alpha = 0.2, size = 2, shape = 16, stroke = 0) +
+  geom_vline(xintercept = cutoff, size = 1, color = "darkblue") +
+  geom_line(aes(x = x, y = linea_izquierda), color = "blue", size = 1, alpha = 0.8) +
+  geom_line(aes(x = x, y = linea_derecha), color = "blue", size = 1, alpha = 0.8) +
+  geom_linerange(aes(x = x, ymax = residuales_derecha_top,  ymin = residuales_derecha_bot),
+                alpha = 0.3, size = 1, shape = 16, stroke = 0, color = "red") +
+  geom_linerange(aes(x = x, ymax = residuales_izquierda_top,  ymin = residuales_izquierda_bot),
+                alpha = 0.3, size = 1, shape = 16, stroke = 0, color = "red") +
+  ylab("y") + xlab("x") +
+  theme_classic()
+```
+
+```{r, fig.width = 5, fig.height = 5, warning=FALSE, echo=FALSE, message = FALSE}
+cutoff <- 5
+linea_izquierda <- (10 + 8*x)*ifelse(x <= cutoff, 1, NA)
+linea_derecha <- (110 - 12*x)*ifelse(x >= cutoff, 1, NA)
+
+ejemplo_2 <- tibble(x = x,
+                    y = y,
+                    sims = y + z,
+                    linea_derecha = linea_derecha, 
+                    linea_izquierda = linea_izquierda, 
+                    residuales_derecha = sims - linea_derecha,
+                    residuales_izquierda = sims - linea_izquierda,
+                    residuales_derecha_top = ifelse(residuales_derecha > 0, residuales_derecha, 0),
+                    residuales_izquierda_top = ifelse(residuales_izquierda > 0, residuales_izquierda, 0),
+                    residuales_derecha_bot = ifelse(residuales_derecha < 0, residuales_derecha, 0),
+                    residuales_izquierda_bot = ifelse(residuales_izquierda < 0, residuales_izquierda, 0),
+                    )
+
+g3 <- ejemplo_2 |>
+  ggplot() +
+  geom_point(aes(x = x, y = sims), alpha = 0.2, size = 2, shape = 16, stroke = 0) +
+  geom_vline(xintercept = cutoff, size = 1, color = "darkblue") +
+  geom_line(aes(x = x, y = linea_izquierda), color = "blue", size = 1, alpha = 0.8) +
+  geom_line(aes(x = x, y = linea_derecha), color = "blue", size = 1, alpha = 0.8) +
+  geom_linerange(aes(x = x, ymax = residuales_derecha_top,  ymin = residuales_derecha_bot),
+                alpha = 0.3, size = 1, shape = 16, stroke = 0, color = "red") +
+  geom_linerange(aes(x = x, ymax = residuales_izquierda_top,  ymin = residuales_izquierda_bot),
+                alpha = 0.3, size = 1, shape = 16, stroke = 0, color = "red") +
+  ylab("y") + xlab("x") +
+  theme_classic()
+```
+
+```{r, fig.width = 12, fig.height = 5, warning=FALSE, echo=FALSE, message = FALSE}
+g1 + g2 + g3
+```
+
+## Comportamiento del Modelo
+
+Lo que hace MARS es encontrar sistemáticamente los mejores puntos de corte y pendientes para minimizar el error de entrenamiento:
+
+```{r, fig.width = 3, fig.height = 3, warning=FALSE, echo=FALSE, message = FALSE}
+n <- 1
+
+mars_2.1 <- earth(
+  sims ~ x,  
+  data = ejemplo_2,
+  nprune = n+1,
+  degree = n,
+  )
+
+preds <- predict(mars_2.1, ejemplo_2)
+
+ejemplo_2.1 <- tibble(x = x,
+                    y = y,
+                    sims = y + z,
+                    linea_derecha = linea_derecha, 
+                    linea_izquierda = linea_izquierda,
+                    preds = preds,
+                    residuales = sims - preds,
+                    residuales_top = ifelse(residuales > 0, residuales, 0),
+                    residuales_bot = ifelse(residuales < 0, residuales, 0),
+                    )
+
+ejemplo_2.1 |>
+  mutate(preds = preds) |>
+  ggplot() +
+  # geom_vline(xintercept = c(-2.3, 3.7, 6.9, 8.5), color = "black", size = 1, alpha = 0.5) +
+  # geom_line(aes(x = x, y = y), color = "black", size = 1, alpha = 0.5) +
+  geom_point(aes(x = x, y = sims), alpha = 0.2, size = 2, shape = 16, stroke = 0) +
+  geom_line(aes(x = x, y = preds), color = "darkblue", size = 1.5) + 
+  geom_linerange(aes(x = x, ymax = residuales_top,  ymin = residuales_bot),
+                alpha = 0.3, size = 1, shape = 16, stroke = 0, color = "red") +
+  ggtitle(paste("MARS con",n,"nodo")) + 
+  ylab("y") + xlab("")+
+  theme_classic()
+```
+
+## Descripción del Modelo
+
+MARS es un modelo de regresión no paramétrico que a través de funciones bisagra (*hinge functions*). 
+
+Se puede considerar como una generalización de regresión lineal a pedazos o como modificación al método CART con el fin de mejorar su desempeño en el contexto de regresión [6]. 
+
+## Descripción del Modelo
+
+MARS se define con el uso de funciones que son lineales por partes, de la forma $(x - t)_+$ y $(t - x)_+$. Estas funciones toman el máximo entre 0 y el valor dentro de la funcion, por lo tanto, 
+$$
+(x - t)_+ = \max\{ 0, x - t \}= \begin{cases} 
+x - t &\mbox{si } x > t, \\
+0 & \mbox{en otro caso}. \end{cases}
+$$
+Cada función es lineal a trozos con un cambio de pendiente en el valor $t$, lo cual las hace splines lineales, y a cada par dividido en el valor $t$ se le llama un *par reflejado*. 
+
+## Descripción del Modelo
+
+La idea del método es formar pares reflejados para cada variable de entrada $X_j$ con cambios de pendiente en cada valor observado $x_{ij}$. 
+
+Por lo tanto, para el conjunto de variables $X_j$, la colección de funciones base es:
+
+$$
+\mathcal{C} = \{ (X_j - t)_+, (t - X_j)_+ \}, \text{ con } t \in \{ x_{1,j}, x_{2,j}, \ldots x_{N,j} \}, \text{ y } \,\, j = 1,2, \ldots , p.
+$$
+
+## Descripción del Modelo
+
+Cada par reflejado se ve de la siguiente forma:
+
+$$
+h_1(X) = h(X_j - x_{ij}) 
+$$
+$$
+h_2(X) = h(x_{i,j} - X_j)
+$$
+```{r, fig.width = 3, fig.height = 2, warning=FALSE, echo=FALSE, message = FALSE}
+x_left <- seq(-5, -3, 1)
+x_right <- seq(-3, -1, 1)
+y_left <- -(x_left + 3)
+y_right <- 3 + x_right
+
+ejemplo_4 <- tibble(x_left = x_left, x_right = x_right,
+                    y_left = y_left, y_right = y_right)
+
+ejemplo_4 |>
+  ggplot() +
+  geom_line(aes(x = x_left, y = y_left), color = "cyan4", size = 1.5, alpha = 0.7) +
+  geom_line(aes(x = x_right, y = c(0,0,0)), color = "cyan4", size = 1.5, alpha = 0.7, linetype = "dashed") +
+  geom_line(aes(x = x_right, y = y_right), color = "navyblue", size = 1.5, alpha = 0.7) + 
+  geom_line(aes(x = x_left, y = c(0,0,0)), color = "navyblue", size = 1.5, alpha = 0.7, linetype = "dashed") +
+  # ggtitle(paste("MARS con",n,"nodo")) + 
+  annotate("text", x = -1.9, y = 1.9, label = TeX(r'($h_{1} = (X_j-x_{ij})_+$)'), size = 3) +
+  annotate("text", x = -4.1, y = 1.9, label = TeX(r'($h_{2} = (x_{ij}-X_j)_+$)'), size = 3) +
+  ylab("y") + xlab("x")+
+  theme_classic()
+```
+
+## Descripción del Modelo
+
+Entonces, para cada $X_j$, el conjunto de los pares reflejados candidatos que habitan en cada uno de los $x_{ij}$ puntos de tal variable es:
+
+```{r, fig.width = 8, fig.height = 2.5, warning=FALSE, echo=FALSE, message = FALSE}
+x_i <- c(-3, -2, 3)
+x_1 <- seq(-5, -1, length.out = 5)
+y_1 <- ifelse(x_1 > x_i[1], x_1 - x_i[1], x_i[1] - x_1)
+x_2 <- seq(-4, 0, length.out = 5)
+y_2 <- ifelse(x_2 > x_i[2], x_2 - x_i[2], x_i[2] - x_2)
+x_3 <- seq(1, 5,  length.out = 5)
+y_3 <- ifelse(x_3 > x_i[3], x_3 - x_i[3], x_i[3] - x_3)
+ejemplo_4 <- tibble(x_1 = x_1, y_1 = y_1,
+                    x_2 = x_2, y_2 = y_2,
+                    x_3 = x_3, y_3 = y_3)
+
+ejemplo_4 |>
+  ggplot() +
+  geom_line(aes(x = x_1, y = y_1), color = "blue", size = 1.5, alpha = 0.7) + 
+  geom_line(aes(x = x_2, y = y_2), color = "darkblue", size = 1.5, alpha = 0.7) + 
+  geom_line(aes(x = x_3, y = y_3), color = "black", size = 1.5, alpha = 0.7) + 
+  annotate("text", x = x_i[1]-0.5, y = 1, label = TeX(r'($x_{1,j}$)'), size = 5.5) +
+  annotate("text", x = x_i[2]-0.5, y = 1, label = TeX(r'($x_{2,j}$)'), size = 5.5) +
+  annotate("text", x = x_i[3]-0.5, y = 1, label = TeX(r'($x_{N,j}$)'), size = 5.5) +
+  annotate("text", x = 0.5, y = 1.2, label = "...", size = 10) +
+  # ggtitle(paste("MARS con",n,"nodo")) + 
+  ylab("y") + xlab("x")+
+  theme_classic()
+```
+
+## Descripción del Modelo
+
+El modelo que utilizamos entonces para juntar todas las variables es uno aditivo en $\boldsymbol\beta$: 
+$$
+f(X) = \beta_0 + \sum_{m=1}^M \beta_m h_m(X),
+$$
+donde cada función $h_m(X)$ es elemento de $\mathcal{C}$ o una combinación lineal de estas funciones base.
+
+## Descripción del Modelo
+
+* El par reflejado que se agrega es aquel que minimice el error de entrenamiento. 
+
+* Este proceso se repite para cada uno de los pares reflejados restantes, resolviendo OLS (ordinary least squares) para determinar el nuevo $\boldsymbol\beta$, y agregando aquel que continue minimizando el error. 
+
+* El criterio de paro puede ser ya sea que ninguno de los pares reflejados restantes reduzca suficiente el error (en términos absolutos o relativos), o hasta que tengamos un número determinado de variables en el modelo.
+
+## Descripción del Modelo
+
+* Este llevará a sobreajuste de los datos, pero esto es lo que se está buscando en esta parte del procedimiento al minimizar el error de entrenamiento. 
+
+* Ya teniendo $\mathcal{M}$, se empieza la segunda parte del ajuste del modelo, que es la parte de podarlo. 
+
+* En este caso, se van eliminando los términos $h_i(X)$ iterativamente, empezando por el que produce el menor incremento en el error cuadrático residual cuando se quita.
+
+* El proceso de eliminación se hace utilizando la métrica de validación cruzada generalizada para ahorrar costo computacional: 
+
+$$
+GCV(\lambda) = \frac{ \sum_{i=1}^N (y_i - \hat f_\lambda(x_i))^2 }{\left( \frac{1 - M(\lambda)}{N} \right)^2},
+$$
+
+## Implementación
+
+Para nuestra implementación, utilizamos una base de datos de `spam`, tomada de [3]. Es una colección de palabras y caracteres que aparecen comúnmente en mensajes que son *spam*. La variable respuesta es una variable categórica que tiene dos niveles: `spam`, `no_spam`. Más información se puede ver en [4]. 
+
+```{r, warning=FALSE, echo=FALSE, message = FALSE}
+# Cargamos datos de entrenamiento
+spam_entrena <- read_csv('./datos/spam-entrena.csv') |> 
+  mutate(spam = ifelse(spam == 0, "no_spam", "spam")) |> 
+  mutate(spam = factor(spam))
+# Cargamos datos de prueba
+spam_prueba <- read_csv('./datos/spam-prueba.csv') |> 
+  mutate(spam = ifelse(spam == 0, "no_spam", "spam")) |> 
+  mutate(spam = factor(spam)) 
+# head(spam_entrena |> select(wfyour,wfaddress,wfemail,crlaverage,spam))
+```
+
+```{r, warning=FALSE, echo=FALSE, message = FALSE}
+# modelo
+modelo_mars <- mars(mode = "classification", prod_degree = 5, prune_method = "backward") |>
+  set_engine("earth")
+# receta
+spam_receta <- recipe(spam ~ ., spam_entrena) |> 
+  step_relevel(spam, ref_level = "no_spam", skip = TRUE)
+# flujo
+spam_flujo_1 <- workflow() |> 
+  add_recipe(spam_receta) |> 
+  add_model(modelo_mars) 
+modelo_mars <- fit(spam_flujo_1, spam_entrena)
+```
+
+## Implementación
+
+Podemos hacer predicciones con este modelo. Por ejemplo, en entrenamiento tenemos las predicciones de clase dan:
+
+```{r, warning=FALSE, echo=FALSE}
+# Definimos las métricas de desempeño
+metricas_spam <- metric_set(roc_auc, accuracy, sens, spec)
+
+preds_entrena <- predict(modelo_mars, spam_entrena, type = "prob") |> 
+  bind_cols(predict(modelo_mars, spam_entrena)) |> 
+  bind_cols(spam_entrena |> select(spam))
+preds_entrena |> 
+  metricas_spam(spam, .pred_no_spam, estimate = .pred_class) |> 
+  mutate(across(is_double, round, 2))
+```
+
+## Implementación
+
+En prueba: 
+
+```{r, warning=FALSE, echo=FALSE}
+preds_prueba <- predict(modelo_mars, spam_prueba, type = "prob") |> 
+  bind_cols(predict(modelo_mars, spam_prueba)) |> 
+  bind_cols(spam_prueba |> select(spam))
+res_mars <- preds_prueba |> 
+  metricas_spam(spam, .pred_no_spam, estimate = .pred_class) |> 
+  mutate(across(is_double, round, 2)) 
+res_mars
+```
+
+## Implementación
+
+En la siguiente tabla, podemos ver los coeficientes que se usan para este modelo final (los primeros 10).
+
+```{r, warning=FALSE, echo=FALSE}
+mars2 <- earth(
+  spam ~ .,  
+  data = spam_entrena,
+  degree = 2)
+
+summary(mars2) %>% .$coefficients %>% head(10)
+```
+
+## Comparación con Árboles y Bosques Aleatorios
+
+Ajustamos otros dos modelos, un árbol de decisiones y bosques aleatorios, y podemos comparar el ajuste de MARS contra estos modelos. Las implementaciones para estos datos la tomamos de [5]. 
+
+```{r,warning=FALSE, echo=FALSE, message = FALSE}
+spam_arbol <- decision_tree(cost_complexity = 0, 
+                            min_n = 1) |> 
+  set_engine("rpart") |> 
+  set_mode("classification") |> 
+  set_args(model = TRUE)
+# receta
+spam_receta <- recipe(spam ~ ., spam_entrena) |> 
+  step_relevel(spam, ref_level = "no_spam", skip = TRUE)
+# flujo
+spam_flujo_1 <- workflow() |> 
+  add_recipe(spam_receta) |> 
+  add_model(spam_arbol) 
+arbol_grande <- fit(spam_flujo_1, spam_entrena)
+```
+
+```{r,warning=FALSE, echo=FALSE, message = FALSE}
+# Desempeño en prueba
+
+preds_prueba <- predict(arbol_grande, spam_prueba, type = "prob") |> 
+  bind_cols(predict(arbol_grande, spam_prueba)) |> 
+  bind_cols(spam_prueba |> select(spam))
+res_arboles <- preds_prueba |> 
+  metricas_spam(spam, .pred_no_spam, estimate = .pred_class) |> 
+  mutate(across(is_double, round, 2)) 
+```
+
+```{r,warning=FALSE, echo=FALSE, message = FALSE}
+spam_bosque <- rand_forest(mtry = 6, trees = 1000) |> 
+  set_engine("ranger", importance = "permutation") |> 
+  set_mode("classification")
+# flujo
+spam_flujo_2 <- workflow() |> 
+  add_recipe(spam_receta) |> 
+  add_model(spam_bosque) 
+flujo_ajustado <- fit(spam_flujo_2, spam_entrena)
+```
+
+```{r,warning=FALSE, echo=FALSE, message = FALSE}
+bosque <- extract_fit_parsnip(flujo_ajustado)
+```
+
+```{r,warning=FALSE, echo=FALSE, message = FALSE}
+res_bosque <- predict(flujo_ajustado , spam_prueba, type = "prob") |>
+  bind_cols(predict(flujo_ajustado, spam_prueba)) |> 
+  bind_cols(spam_prueba |> select(spam)) |> 
+  metricas_spam(spam, .pred_no_spam, estimate = .pred_class) |> 
+  mutate(across(is_double, round, 2))
+```
+
+```{r,warning=FALSE, echo=FALSE}
+resultados_tabla <- res_mars |> 
+  mutate(estimate_mars = .estimate, estimate_arboles = res_arboles$.estimate, 
+         estimate_bosques = res_bosque$.estimate ) |>
+  select(-.estimate, -.estimator)
+  rename(resultados_tabla, MARS = estimate_mars, Arboles = estimate_arboles, Bosques = estimate_bosques)
+```
+
+## Curva Precision-Recall
+
+Podemos visualizar esta diferencia con una gráfica de precision-recall: 
+
+```{r,warning=FALSE, echo=FALSE}
+modelos <- list(arbol_grande = arbol_grande, mars = modelo_mars,  bosque = bosque)
+prec_tbl <- map(names(modelos), function(mod_nombre){
+  predict(modelos[[mod_nombre]], spam_prueba, type = "prob") |> 
+    bind_cols(spam_prueba |> select(spam)) |> 
+    pr_curve(spam, .pred_no_spam) |> 
+    mutate(modelo = mod_nombre)
+  }) |> 
+  bind_rows()
+ggplot(prec_tbl, 
+       aes(x = recall, y = precision, colour = modelo)) + 
+ geom_path() + geom_point(size = 1) 
+```
+
+## Curva ROC
+
+```{r,warning=FALSE, echo=FALSE}
+roc_tbl <- map(names(modelos), function(mod_nombre){
+  predict(modelos[[mod_nombre]], spam_prueba, type = "prob") |> 
+    bind_cols(spam_prueba |> select(spam)) |> 
+    roc_curve(spam, .pred_no_spam) |> 
+    mutate(modelo = mod_nombre)
+  }) |> 
+  bind_rows()
+ggplot(roc_tbl, 
+       aes(x = 1 - specificity, y = sensitivity, colour = modelo)) + 
+  geom_point(size= 0.5) + geom_path()
+```
+
+## Ventajas 
+* Al ser lineal, resulta ser relativamente parsimonioso; preserva bastante interpretabilidad de los coeficientes, aún en presencia de interacciones.
+* Funciona bien tanto para baja como alta cardinalidad.
+* No es computacionalmente costoso.
+* Hace selección de variables automáticamente, tanto por si solas como interacciones.
+* Preciso si localmente es correcto hacer aporximaciones lineales.
+
+## Desventajas
+* Existen modelos que tienen mejor desempeño predictivo; vimos arriba que bosques aleatorios funcionó casi igual, aunque en general este supera a MARS.
+* Paquetes como earth no incluyen funciones de órdenes mayores (aunque, de acuerdo a [6], el hacer interacciones de un orden ayuda a la interpretabilidad al hacer superficies igual a 0 donde no queremos aproximar).
+* Poco preciso si en general hacer las relaciones lineales, aún localmente, es incorrecto.
+
+## Conclusiones
+
+El modelo de MARS es un modelo bastante bueno y aplicable a varios tipos de problemas. Mientras que su uso principal es en problemas de regresión, presentamos un ejemplo en el que se aplica para clasificación. Aún así, tuvo un desempeño comparable con Bosques Aleatorios. 
+
+Si se tienen interacciones relativamente lineales y una variable a predecir continua, entonces el algoritmo tiene muchas ventajas relativo a por ejemplo árboles o una regresión lineal simple.
+
+## Referencias
+
+* [1] Friedman, J. H. (1991). "Multivariate Adaptive Regression Splines". The Annals of Statistics. *19* (1): 1–67.
+
+* [2] [Notas sobre MARS](https://rubenfcasal.github.io/aprendizaje_estadistico/mars.html)
+
+* [3] [Base de datos Spam](https://archive.ics.uci.edu/ml/datasets/spambase)
+
+* [4] [Datos de Spam](https://lorrie.cranor.org/pubs/spam/)
+
+* [5] [Árboles aleatorios y bosques](https://aprendizaje-maquina-2021-mcd.netlify.app/m%C3%A9todos-basados-en-%C3%A1rboles.html)
+
+* [6] Hastie, T., et al. "The Elements of Statistical Learning", Springer Series in Statistics, ISBN 0172-7397, 745 pp. (2009): 291.
+
+## Referencias
+
+* [7] Stone, C. J., et al. "Polynomial splines and their tensor products in extended linear modeling: 1994 Wald memorial lecture." The Annals of Statistics *25.4* (1997): 1371-1470.
+
+* [8] Stephen Milborrow. Derived from mda:mars by Trevor Hastie and Rob Tibshirani. Uses Alan Miller's Fortran utilities with Thomas Lumley's
+  leaps wrapper. (2021). earth: Multivariate Adaptive Regression Splines. R package version 5.3.1.
+  https://CRAN.R-project.org/package=earth
+  
+* [9] [Video del cual basamos algunas gráficas](https://www.youtube.com/watch?v=CMZ4I09PL_I)
+
+* [10] [Multivariate adaptive regression splines](https://projecteuclid.org/journals/annals-of-statistics/volume-19/issue-1/Multivariate-Adaptive-Regression-Splines/10.1214/aos/1176347963.full)
+
+* [11] [How to improve a linear regression with Mars](https://towardsdatascience.com/mars-multivariate-adaptive-regression-splines-how-to-improve-on-linear-regression-e1e7a63c5eae)
+
+* [12] [Wikipedia de MARS](https://en.wikipedia.org/wiki/Multivariate_adaptive_regression_spline)

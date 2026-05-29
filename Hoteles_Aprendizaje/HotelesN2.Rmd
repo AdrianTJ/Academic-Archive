@@ -1,0 +1,890 @@
+---
+title: "Hoteles Kaggle"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+# install.packages("polycor")
+# install.packages("baguette")
+
+library(tidyverse)
+library(tidymodels)
+library(rsample)
+library(polycor)
+library(baguette)
+
+#En este script guardamos funciones y variables adicionales
+source("hoteles_aux.R")
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Proyecto Aprendizaje de Maquina - Hoteles Kaggle
+
+
+### Carga y transformaciones iniciales
+
+Cargamos la base de entrenamiento y validacion.
+
+```{r}
+hoteles <- read.csv("Datos/entrena.csv") 
+```
+
+Manipulamos los valores de año, mes y dia para obtener fechas y ordenar los datos.
+
+```{r}
+# Convertimos los meses a valores numericos
+hoteles <- hoteles |> mutate(month_as_number = map_dbl(arrival_date_month, month_to_number))
+
+# Creamos la variable de fecha para poder acomodarlos en el tiempo
+hoteles <- hoteles |> 
+  mutate(fecha = paste(arrival_date_year, month_as_number, arrival_date_day_of_month) |>
+                as.Date(format = '%Y %m %d')) |>
+  arrange(by = fecha)
+```
+
+Realizamos algunas transformaciones tras haber hecho el analisis exploratorio.
+
+```{r}
+hoteles <- hoteles |>
+  
+  #Filtros por outliers
+  
+  filter(adr >= 0) |> #Hay un valor negativo de adr
+  filter(adr < 600) |> #Hay un valor muy alto de adr
+  
+  #Transformaciones
+  
+  mutate(
+    
+         #Variables de caracteres
+    
+         agent = ifelse(agent %in% new_ca == TRUE, agent, 
+                 ifelse(agent %in% new_ca_buenos == TRUE, "BUENO", 
+                 ifelse(agent %in% new_ca_malos == TRUE, "MALO","otros"))),
+         
+         assigned_room_type = ifelse(assigned_room_type  %in% c("L","P"), "otros", assigned_room_type),
+         
+         company = ifelse(company %in% new_ccs == TRUE, company, 
+                   ifelse(company %in% new_ccs_buenos == TRUE, "BUENO","otros")),
+         
+         country = ifelse(country %in% new_cc == TRUE, country, 
+                   ifelse(country %in% new_cc_buenos == TRUE, "BUENO", "otros")),
+         
+         distribution_channel = ifelse(distribution_channel == "Undefined", "otros", distribution_channel),
+         
+         market_segment = ifelse(market_segment == "Undefined", "otros", market_segment),
+
+        ) |>
+  
+  
+  #Variables derivadas
+  
+  mutate(
+    
+         #Variables de caracteres
+    
+         cat_adults = cut(adults, 
+                          breaks =c(0,1,2,Inf), include.lowest = T),
+
+         cat_stays_in_week_nights = cut(stays_in_week_nights,
+                                        breaks = c(-1,0,5,9,Inf), include.lowest = T),
+         
+         cat_stays_in_weekend_nights = cut(stays_in_weekend_nights, 
+                                           breaks = c(-1,0,1,2,3,Inf), include.lowest = T),
+         
+         cat_previous_cancellations = cut(previous_cancellations,
+                                          breaks = c(-1,0,1,5,Inf), include.lowest = T),
+         
+         cat_previous_bookings_not_canceled = cut(previous_bookings_not_canceled,
+                                                  breaks = c(-1,0,9,15,Inf), include.lowest = T),
+         
+         cat_total_of_special_requests = cut(total_of_special_requests, 
+                                             breaks = c(-1,0, 1, 2, 3, Inf), include.lowest = T),
+         
+         cat_required_car_parking_spaces = cut(required_car_parking_spaces,
+                                               breaks = c(-1,0, Inf), include.lowest = T),
+         
+         cat_booking_changes = cut(booking_changes, breaks = c(-1,0, Inf), include.lowest = T),
+         
+         cat_babies = cut(babies, breaks = c(-1,0,Inf), include.lowest = T),
+         
+         #Variables numericas
+         
+         log_adr = log(1+adr),
+         
+         log_lead_time = log(1+lead_time),
+           
+         costo_total = ifelse(stays_in_week_nights + stays_in_weekend_nights == 0, 0,
+                             (stays_in_week_nights+stays_in_weekend_nights)*adr),
+          
+         log_costo_total = log(1+costo_total),
+         
+         igual_reservado = ifelse(reserved_room_type == assigned_room_type, 1,0)
+    
+        ) |>
+  
+  
+  #Conversion a factores
+  
+  mutate(
+    
+         #Variable de respuesta
+    
+         is_canceled = factor(is_canceled),
+    
+         
+         #Variables de tiempo
+         
+         arrival_date_year = factor(arrival_date_year),
+         
+         arrival_date_month = factor(arrival_date_month),
+         
+         arrival_date_week_number = factor(arrival_date_week_number),
+         
+         
+         #Variables de caracteres
+         agent = factor(agent),
+
+         company = factor(company),
+         
+         country = factor(country),
+         
+         assigned_room_type = factor(assigned_room_type),
+         
+         customer_type = factor(customer_type),
+         
+         distribution_channel = factor(distribution_channel),
+         
+         hotel = factor(hotel),
+         
+         market_segment = factor(market_segment),
+         
+         meal = factor(meal),
+         
+         deposit_type = factor(deposit_type),
+         
+         cat_adults = factor(cat_adults),
+
+         cat_stays_in_week_nights = factor(cat_stays_in_week_nights),
+         
+         cat_stays_in_weekend_nights = factor(cat_stays_in_weekend_nights),
+         
+         cat_previous_cancellations = factor(cat_previous_cancellations),
+         
+         cat_previous_bookings_not_canceled = factor(cat_previous_bookings_not_canceled),
+         
+         cat_total_of_special_requests = factor(cat_total_of_special_requests),
+         
+         cat_required_car_parking_spaces = factor(cat_required_car_parking_spaces),
+         
+         cat_booking_changes = factor(cat_booking_changes),
+         
+         cat_babies = factor(cat_babies)
+         
+         
+         #Variables numericas
+         
+         # is_repeated_guest = factor(is_repeated_guest),
+         
+         # days_in_waiting_list = log(days_in_waiting_list+1E-16),
+         
+         # booking_changes = log(booking_changes+1E-16)
+         
+        )
+
+# Si ninios es NA entonces se va a 0 (la mediana), solo hay 4 NA. 
+hoteles$children[is.na(hoteles$children)] <- 0 
+
+```
+
+```{r}
+hoteles_split = initial_split(hoteles, prop = 0.99)
+# hoteles_split = initial_split(hoteles, prop = 0.80)
+# hoteles_split = initial_time_split(hoteles, prop = 0.80)
+hoteles_ent <- training(hoteles_split)
+
+rbind(
+training(hoteles_split)  |> tail(5) |> select(fecha),
+testing(hoteles_split)  |> head(5) |> select(fecha)
+)
+```
+
+
+
+
+## Receta
+
+```{r}
+receta_hoteles <- recipe(is_canceled ~ 
+                           
+                                       # #Variables categoricas
+                                       # 
+                                       arrival_date_year +                #Chance afecta
+                                       arrival_date_month +
+                                       arrival_date_week_number +
+                                       # 
+                                       customer_type +
+                                       hotel +
+                                       meal +
+                                       market_segment +
+                                       distribution_channel +
+                                       reserved_room_type +
+                                       assigned_room_type +
+                                       deposit_type +
+                                       country +
+                                       agent +
+                                       company +
+                                       
+                                       cat_adults +
+                                       cat_stays_in_week_nights +
+                                       cat_stays_in_weekend_nights +
+                                       cat_previous_cancellations +
+                                       cat_previous_bookings_not_canceled +
+                                       cat_total_of_special_requests +
+                                       cat_required_car_parking_spaces +
+                                       cat_booking_changes +
+                                       cat_babies +
+
+
+                                       #Variables numericas
+
+                                       is_repeated_guest +
+                                       igual_reservado +
+
+                                       adults +                           #Mejor la categorica
+                                       stays_in_week_nights +             #Mejor la categorica
+                                       stays_in_weekend_nights +          #Mejor la categorica
+                                       previous_cancellations +           #Mejor la categorica
+                                       previous_bookings_not_canceled +   #Mejor la categorica
+                                       total_of_special_requests +        #Mejor la categorica
+                                       required_car_parking_spaces +      #Mejor la categorica
+                                       booking_changes +                  #Mejor la categorica
+                                       babies +                           #Muy poca informacion
+
+                                       children +                         #Muy poca informacion
+                                       
+
+                                       days_in_waiting_list +             #Muy ruidosa
+
+                                       # adr +                              #Mejor log
+                                       log_adr +
+                                       # lead_time +                        #Mejor log
+                                       log_lead_time+
+                                       # # costo_total +                      #Mejor log
+                                       log_costo_total
+                                       # 
+                                       , data = hoteles_ent) |>
+  
+  
+  # Nuevos
+  # 
+   # step_novel(arrival_date_year, new_level = paste0(most_common(hoteles_ent, "arrival_date_month"),"_")) |>                #Chance afecta
+   # step_novel(arrival_date_month, new_level = paste0(most_common(hoteles_ent,"arrival_date_month"),"_")) |>
+   # step_novel(arrival_date_week_number, new_level = paste0(most_common(hoteles_ent,"arrival_date_week_number"),"_")) |>
+   # 
+   # step_novel(customer_type, new_level = paste0(most_common(hoteles_ent,"customer_type"),"_")) |>
+   # step_novel(hotel, new_level = paste0(most_common(hoteles_ent,"hotel"),"_")) |>
+   # step_novel(meal, new_level = paste0(most_common(hoteles_ent,"meal"),"_")) |>
+   # step_novel(market_segment, new_level = paste0(most_common(hoteles_ent,"market_segment"),"_")) |>
+   # step_novel(distribution_channel, new_level = paste0(most_common(hoteles_ent,"distribution_channel"),"_")) |>
+   # step_novel(reserved_room_type, new_level = paste0(most_common(hoteles_ent,"reserved_room_type"),"_")) |>
+   # step_novel(assigned_room_type, new_level = paste0(most_common(hoteles_ent,"assigned_room_type"),"_")) |>
+   # step_novel(deposit_type, new_level = paste0(most_common(hoteles_ent,"deposit_type"),"_")) |>
+   # step_novel(country, new_level = paste0(most_common(hoteles_ent,"country"),"_")) |>
+   # step_novel(agent, new_level = paste0(most_common(hoteles_ent,"agent"),"_")) |>
+   # step_novel(company, new_level = paste0(most_common(hoteles_ent,"company"),"_")) |>
+
+   # step_novel(cat_adults, new_level = paste0(most_common(hoteles_ent,"cat_adults"),"_")) |>
+   # step_novel(cat_stays_in_week_nights, new_level = paste0(most_common(hoteles_ent,"cat_stays_in_week_nights"),"_")) |>
+   # step_novel(cat_stays_in_weekend_nights, new_level = paste0(most_common(hoteles_ent,"cat_stays_in_weekend_nights"),"_")) |>
+   # step_novel(cat_previous_cancellations, new_level = paste0(most_common(hoteles_ent,"cat_previous_cancellations"),"_")) |>
+   # step_novel(cat_previous_bookings_not_canceled, new_level = paste0(most_common(hoteles_ent,"cat_previous_bookings_not_canceled"),"_")) |>
+   # step_novel(cat_total_of_special_requests, new_level = paste0(most_common(hoteles_ent,"cat_total_of_special_requests"),"_")) |>
+   # step_novel(cat_required_car_parking_spaces, new_level = paste0(most_common(hoteles_ent,"cat_required_car_parking_spaces"),"_")) |>
+   # step_novel(cat_booking_changes, new_level = paste0(most_common(hoteles_ent,"cat_booking_changes"),"_")) |>
+   # step_novel(cat_babies, new_level = paste0(most_common(hoteles_ent,"cat_babies"),"_")) |>
+  
+# Otros
+  # 
+   # step_other(arrival_date_year, threshold = 0.001, other = most_common(hoteles_ent, "arrival_date_month")) |>                #Chance afecta
+   # step_other(arrival_date_month, threshold = 0.001, other = most_common(hoteles_ent,"arrival_date_month")) |>
+   # step_other(arrival_date_week_number, threshold = 0.001, other = most_common(hoteles_ent,"arrival_date_week_number")) |>
+   # 
+   # step_other(customer_type, threshold = 0.001, other = most_common(hoteles_ent,"customer_type")) |>
+   # step_other(hotel, threshold = 0.001, other = most_common(hoteles_ent,"hotel")) |>
+   # step_other(meal, threshold = 0.001, other = most_common(hoteles_ent,"meal")) |>
+   # step_other(market_segment, threshold = 0.001, other = most_common(hoteles_ent,"market_segment")) |>
+   # step_other(distribution_channel, threshold = 0.001, other = most_common(hoteles_ent,"distribution_channel")) |>
+   # step_other(reserved_room_type, threshold = 0.001, other = most_common(hoteles_ent,"reserved_room_type")) |>
+   # step_other(assigned_room_type, threshold = 0.001, other = most_common(hoteles_ent,"assigned_room_type")) |>
+   # step_other(deposit_type, threshold = 0.001, other = most_common(hoteles_ent,"deposit_type")) |>
+   # step_other(country, threshold = 0.001, other = most_common(hoteles_ent,"country")) |>
+   # step_other(agent, threshold = 0.001, other = most_common(hoteles_ent,"agent")) |>
+   # step_other(company, threshold = 0.001, other = most_common(hoteles_ent,"company")) |>
+
+   # step_other(cat_adults, threshold = 0.001, other = most_common(hoteles_ent,"cat_adults")) |>
+   # step_other(cat_stays_in_week_nights, threshold = 0.001, other = most_common(hoteles_ent,"cat_stays_in_week_nights")) |>
+   # step_other(cat_stays_in_weekend_nights, threshold = 0.001, other = most_common(hoteles_ent,"cat_stays_in_weekend_nights")) |>
+   # step_other(cat_previous_cancellations, threshold = 0.001, other = most_common(hoteles_ent,"cat_previous_cancellations")) |>
+   # step_other(cat_previous_bookings_not_canceled, threshold = 0.001, other = most_common(hoteles_ent,"cat_previous_bookings_not_canceled")) |>
+   # step_other(cat_total_of_special_requests, threshold = 0.001, other = most_common(hoteles_ent,"cat_total_of_special_requests")) |>
+   # step_other(cat_required_car_parking_spaces, threshold = 0.001, other = most_common(hoteles_ent,"cat_required_car_parking_spaces")) |>
+   # step_other(cat_booking_changes, threshold = 0.001, other = most_common(hoteles_ent,"cat_booking_changes")) |>
+   # step_other(cat_babies, threshold = 0.001, other = most_common(hoteles_ent,"cat_babies")) |>
+  
+
+
+  # Desconocidos
+
+  # step_unknown(arrival_date_year, new_level = "nuevo") |>                #Chance afecta
+   # step_unknown(arrival_date_month, new_level = "nuevo_arrival_date_month") |>    
+   # step_unknown(arrival_date_week_number, new_level = "nuevo_arrival_date_week_number") |>    
+   # 
+   # step_unknown(customer_type, new_level = "nuevo_customer_type") |>    
+   # step_unknown(hotel, new_level = "nuevo_hotel") |>    
+   # step_unknown(meal, new_level = "nuevo_meal") |>
+   # step_unknown(market_segment, new_level = "nuevo-market_segment") |>
+   # step_unknown(distribution_channel, new_level = "nuevo_distribution_channel") |>
+   # step_unknown(reserved_room_type, new_level = "nuevo_reserved_room_type") |>
+   # step_unknown(assigned_room_type, new_level = "nuevo_assigned_room_type") |>
+   # step_unknown(deposit_type, new_level = "nuevo_deposit_type") |>
+   # step_unknown(country, new_level = "nuevo_country") |>
+   # step_unknown(agent, new_level = "nuevo_agent") |>
+   # step_unknown(company, new_level = "nuevo_company") |>
+  
+   # step_unknown(cat_adults, new_level = "nuevo_cat_adults") |>
+   # step_unknown(cat_stays_in_week_nights, new_level = "nuevo_cat_stays_in_week_nights") |>
+   # step_unknown(cat_stays_in_weekend_nights, new_level = "nuevo_cat_stays_in_weekend_nights") |>
+   # step_unknown(cat_previous_cancellations, new_level = "nuevo_cat_previous_cancellations") |>
+   # step_unknown(cat_previous_bookings_not_canceled, new_level = "nuevo_cat_previous_bookings_not_canceled") |>
+   # step_unknown(cat_total_of_special_requests, new_level = "nuevo_cat_total_of_special_requests") |>
+   # step_unknown(cat_required_car_parking_spaces, new_level = "nuevo_cat_required_car_parking_spaces") |>
+   # step_unknown(cat_booking_changes, new_level = "nuevo_cat_booking_changes") |>
+   # step_unknown(cat_babies, new_level = "nuevo_cat_babies") |>
+   
+  # # step_unknown(all_nominal(), new_level = "otros") %>% #faltantes en categoria nueva
+  # 
+
+  #Relevel
+  # step_relevel(arrival_date_year, ref_level = most_common(hoteles_ent,"arrival_date_year")) |>                #Chance afecta
+  # step_relevel(arrival_date_month, ref_level = most_common(hoteles_ent,"arrival_date_month")) |>   
+  # step_relevel(arrival_date_week_number, ref_level = most_common(hoteles_ent,"arrival_date_week_number")) |>   
+  # 
+  # step_relevel(customer_type, ref_level = most_common(hoteles_ent,"customer_type")) |>   
+  # step_relevel(hotel, ref_level = most_common(hoteles_ent,"hotel")) |>   
+  # step_relevel(meal,  ref_level = most_common(hoteles_ent,"meal")) |>   
+  # step_relevel(market_segment, ref_level = most_common(hoteles_ent,"market_segment")) |>   
+  # step_relevel(distribution_channel, ref_level = most_common(hoteles_ent,"distribution_channel")) |>   
+  # step_relevel(reserved_room_type, ref_level = most_common(hoteles_ent,"reserved_room_type")) |>   
+  # step_relevel(assigned_room_type, ref_level = most_common(hoteles_ent,"assigned_room_type")) |>   
+  # step_relevel(deposit_type, ref_level = most_common(hoteles_ent,"deposit_type")) |>   
+  # step_relevel(country, ref_level = most_common(hoteles_ent,"country")) |>   
+  # step_relevel(agent, ref_level = most_common(hoteles_ent,"agent")) |>   
+  # step_relevel(company, ref_level = most_common(hoteles_ent,"company")) |>   
+  # 
+  # step_relevel(cat_adults, ref_level = most_common(hoteles_ent,"cat_adults")) |>   
+  # step_relevel(cat_stays_in_week_nights, ref_level = most_common(hoteles_ent,"cat_stays_in_week_nights")) |>   
+  # step_relevel(cat_stays_in_weekend_nights, ref_level = most_common(hoteles_ent,"cat_stays_in_weekend_nights")) |>   
+  # step_relevel(cat_previous_cancellations, ref_level = most_common(hoteles_ent,"cat_previous_cancellations")) |>   
+  # step_relevel(cat_previous_bookings_not_canceled, ref_level = most_common(hoteles_ent,"cat_previous_bookings_not_canceled")) |>   
+  # step_relevel(cat_total_of_special_requests, ref_level = most_common(hoteles_ent,"cat_total_of_special_requests")) |>   
+  # step_relevel(cat_required_car_parking_spaces, ref_level = "most_common(hoteles_ent,"cat_required_car_parking_spaces")) |>   
+  # step_relevel(cat_booking_changes, ref_level = most_common(hoteles_ent,"cat_booking_changes")) |>   
+  # step_relevel(cat_babies, ref_level = most_common(hoteles_ent,"cat_babies")) |>   
+
+  # # step_unknown(all_nominal(), new_level = "otros") %>% #faltantes en categoria nueva
+
+  #Normalize
+  step_normalize(
+                 is_repeated_guest,
+                 igual_reservado,
+
+                 adults,                          #Mejor la categorica
+                 stays_in_week_nights,         #Mejor la categorica
+                 stays_in_weekend_nights,        #Mejor la categorica
+                 previous_cancellations,       #Mejor la categorica
+                 previous_bookings_not_canceled,  #Mejor la categorica
+                 total_of_special_requests,        #Mejor la categorica
+                 required_car_parking_spaces,      #Mejor la categorica
+                 booking_changes,                 #Mejor la categorica
+                 babies,                          #Muy poca informacion
+
+                 children,                         #Muy poca informacion
+                
+
+                 days_in_waiting_list,           #Muy ruidosa
+
+                 # adr,                             #Mejor log
+                 log_adr,
+                 # lead_time,                       #Mejor log
+                 log_lead_time,
+                 # # costo_total,                      #Mejor log
+                 log_costo_total
+    ) |>
+
+
+  #Dummies
+
+  step_dummy(
+             arrival_date_year,                #Chance afecta
+             arrival_date_month,
+             arrival_date_week_number,
+             
+             customer_type,
+             hotel,
+             meal,
+             market_segment,
+             distribution_channel,
+             reserved_room_type,
+             assigned_room_type,
+             deposit_type,
+             country,
+             agent,
+             company,
+
+             cat_adults,
+             cat_stays_in_week_nights,
+             cat_stays_in_weekend_nights,
+             cat_previous_cancellations,
+             cat_previous_bookings_not_canceled,
+             cat_total_of_special_requests,
+             cat_required_car_parking_spaces,
+             cat_booking_changes,
+             cat_babies
+            )
+
+
+  # #Interacciones
+  # 
+  # 
+  # # Numerica vs Categorica
+  # 
+  step_interact(terms = ~ is_repeated_guest:starts_with("deposit_type")) |>
+  step_interact(terms = ~ log_adr:starts_with("reserved_room_type")) |>
+  step_interact(terms = ~ log_lead_time:starts_with("cat_total_of_special_requests")) |>
+  step_interact(terms = ~ is_repeated_guest:starts_with("cat_total_of_special_requests")) |>
+  step_interact(terms = ~ total_of_special_requests:starts_with("cat_total_of_special_requests")) |>
+  step_interact(terms = ~ stays_in_week_nights:starts_with("cat_stays_in_week_nights")) |>
+  step_interact(terms = ~ required_car_parking_spaces:starts_with("cat_required_car_parking_spaces")) |>
+  # 
+  # 
+  # # Numerica vs Numerica
+  # 
+  step_interact(terms = ~ log_lead_time:is_repeated_guest) |>
+  step_interact(terms = ~ log_lead_time:log_adr) |>
+  step_interact(terms = ~ log_lead_time:log_costo_total) |>
+
+  # 
+  # Categorica vs Categorica
+  
+  step_interact(terms = ~ starts_with("arrival_date_month"):starts_with("arrival_date_year")) |>
+  step_interact(terms = ~ starts_with("customer_type"):starts_with("hotel")) |>
+  step_interact(terms = ~ starts_with("cat_total_of_special_requests"):starts_with("customer_type") ) |>
+  step_interact(terms = ~ starts_with("cat_total_of_special_requests"):starts_with("company")) |>
+  step_interact(terms = ~ starts_with("cat_total_of_special_requests"):starts_with("country"))
+  
+  
+  
+```
+
+
+
+## Modelo
+
+Selecciona el modelo en la siguiente celda: 
+
+"logistico_con_tuning" : se corre el modelo logistico con una malla de tuning para penalty y mixture
+"logistico" : se corre el modelo logistico con una combinacion fija de penalty y mixture
+"arboles" : se corre random forest con boosting
+
+```{r}
+eleccion_modelo <- "arboles"
+```
+
+
+### Logistico con Tuning
+
+```{r}
+if (eleccion_modelo == "logistico_con_tuning"){
+
+  # Hiperparametros
+  modelo_logistico_tune <-
+    logistic_reg(mixture = tune(), penalty = tune()) %>%
+    set_args(lambda.min_ratio = 1e-18) %>%
+    set_engine("glmnet") %>%
+    set_mode("classification")
+  
+  flujo_logistico_tune <- workflow() %>%
+    add_recipe(receta_hoteles) %>%
+    add_model(modelo_logistico_tune)
+  
+  val_split <- manual_rset(hoteles_split %>% list(), "validacion")
+  params <- parameters(penalty(range = c(-5, 1), trans = log10_trans()),
+                              mixture(range = c(0, 1)))
+  
+  grid_logistico_tune <- grid_regular(params, levels = c(penalty = 10, mixture = 5))
+  mis_metricas <- metric_set(mn_log_loss)
+  eval_tbl_logistico_tune <- tune_grid(flujo_logistico_tune,
+                        resamples = val_split,
+                        grid = grid_logistico_tune,
+                        metrics = mis_metricas, )
+  ajustes_tbl_logistico_tune <- eval_tbl_logistico_tune %>%
+    unnest(cols = c(.metrics)) %>%
+    select(id, mixture, penalty, .metric, .estimate)
+  
+  ajustes_tbl_logistico_tune %>% arrange(by = .estimate)
+  
+  mejor_modelo_logistico_tune <- select_best(eval_tbl_logistico_tune)
+  
+  flujo_ajustado_logistico_tune <- finalize_workflow(flujo_logistico_tune,
+                                                     mejor_modelo_logistico_tune) %>% 
+                                                    fit(hoteles_ent)
+  
+  logloss_logistico_tune <- cbind(calculate_logloss(flujo_ajustado_logistico_tune, training(hoteles_split)) |>
+                                                rename(log_loss_entrena = log_loss_prueba),
+                             calculate_logloss(flujo_ajustado_logistico_tune, testing(hoteles_split)))
+  logloss_logistico_tune
+  
+  print(paste("El mejor modelo es con: Penalty =", mejor_modelo_logistico_tune |> pull(penalty),
+              "Mixture =", mejor_modelo_logistico_tune |> pull(mixture)))
+  
+  ggplot(ajustes_tbl_logistico_tune, aes(x = penalty, y = .estimate, colour = mixture, group = mixture)) +
+    geom_point() + geom_line() + scale_x_log10()
+
+}
+```
+
+
+### Logistico
+
+```{r}
+if (eleccion_modelo == "logistico"){
+  
+  ### Para usarse si es que solo se quiere correr un modelo
+  
+  #mixture = 1, penalty = 0.00464158883361278
+  modelo_logistico <-
+    logistic_reg(mixture = 0.75, penalty = 0.00464158883361278) %>%
+    set_args(lambda.min_ratio = 1e-18) %>%
+    set_engine("glmnet") %>%
+    set_mode("classification")
+  
+  flujo_logistico <- workflow() %>% add_recipe(receta_hoteles) %>%
+    add_model(modelo_logistico)
+  flujo_ajustado_logistico <- fit(flujo_logistico, hoteles_ent)
+
+  logloss_logistico <- cbind(calculate_logloss(flujo_ajustado_logistico, training(hoteles_split)) |>
+                                                rename(log_loss_entrena = log_loss_prueba),
+                             calculate_logloss(flujo_ajustado_logistico, testing(hoteles_split)))
+  logloss_logistico
+}
+```
+
+### Arboles con Tuning
+
+```{r}
+if (eleccion_modelo == "arboles_con_tuning"){
+  
+    modelo_arboles_tune <-
+
+      boost_tree(trees = 200, mtry = tune(), min_n = tune(), 
+                              tree_depth = tune(), learn_rate = 0.2,
+                 mode = "classification") |>
+      set_engine("xgboost")
+    
+    flujo_arboles_tune <- workflow() %>% 
+      add_recipe(receta_hoteles) %>% 
+      add_model(modelo_arboles_tune) 
+    # 
+    # val_split <- manual_rset(hoteles_split %>% list(), "validacion")
+    # params <- parameters(mtry(range = c(1,5)),
+    #                      tree_depth(range = c(5,15)),
+    #                      learn_rate(range = c(.1,.3)),
+    #                      min_n(range = c(2,10)))
+    
+        
+    val_split <- manual_rset(hoteles_split %>% list(), "validacion")
+    params <- parameters(mtry(range = c(1,5)),
+                         tree_depth(range = c(5,15)),
+                         min_n(range = c(2,10))
+                         )
+    
+    grid_arboles_tune <- grid_regular(params, levels = c(mtry = 5, tree_depth = 3, min_n = 5))
+    mis_metricas <- metric_set(mn_log_loss)
+    eval_tbl_arboles_tune <- tune_grid(flujo_arboles_tune,
+                          resamples = val_split,
+                          grid = grid_arboles_tune,
+                          metrics = mis_metricas, )
+    ajustes_tbl_arboles_tune <- eval_tbl_arboles_tune %>%
+      unnest(cols = c(.metrics)) %>%
+      select(id, mtry, tree_depth, min_n, .metric, .estimate)
+  
+    ajustes_tbl_arboles_tune %>% arrange(by = .estimate)
+    
+    mejor_modelo_arboles_tune <- select_best(eval_tbl_arboles_tune)
+    
+    flujo_ajustado_arboles_tune <- finalize_workflow(flujo_arboles_tune,
+                                                       mejor_modelo_arboles_tune) %>% 
+                                                       fit(hoteles_ent)
+    
+    logloss_arboles_tune<- cbind(calculate_logloss(flujo_ajustado_arboles_tune, training(hoteles_split)) |>
+                                                  rename(log_loss_entrena = log_loss_prueba),
+                               calculate_logloss(flujo_ajustado_arboles_tune, testing(hoteles_split)))
+    logloss_arboles_tune
+    
+    print(paste("El mejor modelo es con: Mtry =", mejor_modelo_arboles_tune |> pull(mtry),
+                "Min_n =", mejor_modelo_arboles_tune |> pull(min_n)))
+    
+    ggplot(ajustes_tbl_arboles_tune, aes(x = mtry, y = .estimate, colour = min_n, group = min_n)) +
+      geom_point() + geom_line() + scale_x_log10()
+
+
+}
+```
+
+### Arboles
+
+```{r}
+# eleccion_modelo = "arboles"
+```
+
+
+```{r}
+if (eleccion_modelo == "arboles"){
+  
+    modelo_arboles <-
+      # boost_tree(trees = 100, mode = "classification") |>
+      # boost_tree(trees = 200, mode = "classification") |>
+      boost_tree(
+                 trees = 800,
+                 mtry = 8,
+                 min_n = 300,
+                 learn_rate = 0.1,
+                 sample_size = 0.6,
+                 loss_reduction	= 1,
+                 tree_depth = 8,
+                 
+                 mode = "classification") |>
+      set_engine("xgboost")
+    
+    flujo_arboles <- workflow() %>% add_recipe(receta_hoteles) %>%
+      add_model(modelo_arboles)
+    
+    flujo_ajustado_arboles <- fit(flujo_arboles, hoteles_ent)
+
+    
+    # flujo_arboles <- workflow() %>% 
+    #   add_recipe(receta_hoteles,
+    #              blueprint = hardhat::default_recipe_blueprint(allow_novel_levels = TRUE)) %>% 
+    #   add_model(modelo_arboles) 
+    # 
+    # flujo_ajustado_arboles <- fit(flujo_arboles, hoteles_ent)
+    
+    
+    modelo_ajustado_arboles <- flujo_ajustado_arboles %>% extract_fit_parsnip()
+    
+    logloss_arboles <- cbind(calculate_logloss(flujo_ajustado_arboles, training(hoteles_split)) |>
+                                                rename(log_loss_entrena = log_loss_prueba),
+                             calculate_logloss(flujo_ajustado_arboles, testing(hoteles_split)))
+    logloss_arboles
+}
+```
+
+### Bagging
+
+```{r}
+if (eleccion_modelo == "bagging"){
+    
+    modelo_bag <- bag_tree() %>%
+                    set_engine("rpart", times = 25) %>%
+                    set_mode("classification")
+    
+    flujo_bag <- workflow() %>% add_recipe(receta_hoteles) %>% 
+      add_model(modelo_bag) 
+    flujo_ajustado_bag <- fit(flujo_bag, hoteles_ent)
+    
+    modelo_ajustado_bag <- flujo_ajustado_bag %>% extract_fit_parsnip()
+    
+    logloss_bag <- cbind(calculate_logloss(flujo_ajustado_bag, training(hoteles_split)) |>
+                                                rename(log_loss_entrena = log_loss_prueba),
+                             calculate_logloss(flujo_ajustado_bag, testing(hoteles_split)))
+    logloss_bag
+}
+```
+
+## Predicciones
+
+Recuperamos el modelo final
+
+```{r}
+if (eleccion_modelo == "logistico_con_tuning")
+  {modelo_final <- flujo_ajustado_logistico_tune}
+if (eleccion_modelo == "logistico")
+{modelo_final <- flujo_ajustado_logistico}
+if (eleccion_modelo == "arboles_con_tuning")
+  {modelo_final <- flujo_ajustado_arboles_tune}
+if (eleccion_modelo == "arboles")
+{modelo_final <- flujo_ajustado_arboles}
+if (eleccion_modelo == "bagging")
+  {modelo_final <- flujo_ajustado_bag}
+```
+
+```{r}
+
+hoteles_prueba <- read.csv("Datos/prueba.csv")
+  
+hoteles_prueba <- hoteles_prueba |>
+  
+  #Transformaciones
+  
+  mutate(
+    
+         #Variables de caracteres
+    
+         agent = ifelse(agent %in% new_ca == TRUE, agent, 
+                 ifelse(agent %in% new_ca_buenos == TRUE, "BUENO", 
+                 ifelse(agent %in% new_ca_malos == TRUE, "MALO","otros"))),
+         
+         assigned_room_type = ifelse(assigned_room_type  %in% c("L","P"), "otros", assigned_room_type),
+         
+         company = ifelse(company %in% new_ccs == TRUE, company, 
+                   ifelse(company %in% new_ccs_buenos == TRUE, "BUENO","otros")),
+         
+         country = ifelse(country %in% new_cc == TRUE, country, 
+                   ifelse(country %in% new_cc_buenos == TRUE, "BUENO", "otros")),
+         
+         distribution_channel = ifelse(distribution_channel == "Undefined", "otros", distribution_channel),
+         
+         market_segment = ifelse(market_segment == "Undefined", "otros", market_segment),
+
+        ) |>
+  
+  
+  #Variables derivadas
+  
+  mutate(
+    
+         #Variables de caracteres
+    
+         cat_adults = cut(adults, 
+                          breaks =c(0,1,2,Inf), include.lowest = T),
+
+         cat_stays_in_week_nights = cut(stays_in_week_nights,
+                                        breaks = c(-1,0,5,9,Inf), include.lowest = T),
+         
+         cat_stays_in_weekend_nights = cut(stays_in_weekend_nights, 
+                                           breaks = c(-1,0,1,2,3,Inf), include.lowest = T),
+         
+         cat_previous_cancellations = cut(previous_cancellations,
+                                          breaks = c(-1,0,1,5,Inf), include.lowest = T),
+         
+         cat_previous_bookings_not_canceled = cut(previous_bookings_not_canceled,
+                                                  breaks = c(-1,0,9,15,Inf), include.lowest = T),
+         
+         cat_total_of_special_requests = cut(total_of_special_requests, 
+                                             breaks = c(-1,0, 1, 2, 3, Inf), include.lowest = T),
+         
+         cat_required_car_parking_spaces = cut(required_car_parking_spaces,
+                                               breaks = c(-1,0, Inf), include.lowest = T),
+         
+         cat_booking_changes = cut(booking_changes, breaks = c(-1,0, Inf), include.lowest = T),
+         
+         cat_babies = cut(babies, breaks = c(-1,0,Inf), include.lowest = T),
+         
+         #Variables numericas
+         
+         log_adr = log(1+adr),
+         
+         log_lead_time = log(1+lead_time),
+           
+         costo_total = ifelse(stays_in_week_nights + stays_in_weekend_nights == 0, 0,
+                             (stays_in_week_nights+stays_in_weekend_nights)*adr),
+          
+         log_costo_total = log(1+costo_total),
+         
+         igual_reservado = ifelse(reserved_room_type == assigned_room_type, 1,0)
+    
+        ) |>
+  
+  
+  #Conversion a factores
+  
+  mutate(
+    
+         #Variables de tiempo
+         
+         arrival_date_year = factor(arrival_date_year),
+         
+         arrival_date_month = factor(arrival_date_month),
+         
+         arrival_date_week_number = factor(arrival_date_week_number),
+         
+         
+         #Variables de caracteres
+         agent = factor(agent),
+
+         company = factor(company),
+         
+         country = factor(country),
+         
+         assigned_room_type = factor(assigned_room_type),
+         
+         customer_type = factor(customer_type),
+         
+         distribution_channel = factor(distribution_channel),
+         
+         hotel = factor(hotel),
+         
+         market_segment = factor(market_segment),
+         
+         meal = factor(meal),
+         
+         deposit_type = factor(deposit_type),
+         
+         cat_adults = factor(cat_adults),
+
+         cat_stays_in_week_nights = factor(cat_stays_in_week_nights),
+         
+         cat_stays_in_weekend_nights = factor(cat_stays_in_weekend_nights),
+         
+         cat_previous_cancellations = factor(cat_previous_cancellations),
+         
+         cat_previous_bookings_not_canceled = factor(cat_previous_bookings_not_canceled),
+         
+         cat_total_of_special_requests = factor(cat_total_of_special_requests),
+         
+         cat_required_car_parking_spaces = factor(cat_required_car_parking_spaces),
+         
+         cat_booking_changes = factor(cat_booking_changes),
+         
+         cat_babies = factor(cat_babies)
+         
+         
+         #Variables numericas
+         
+         # is_repeated_guest = factor(is_repeated_guest),
+         
+         # days_in_waiting_list = log(days_in_waiting_list+1E-16),
+         
+         # booking_changes = log(booking_changes+1E-16)
+         
+        )
+
+# Si ninios es NA entonces se va a 0 (la mediana), solo hay 4 NA. 
+hoteles_prueba$children[is.na(hoteles_prueba$children)] <- 0 
+
+
+
+submission <- tibble(id = hoteles_prueba$id, 
+                     prob = predict(modelo_final, hoteles_prueba, type = "prob")$.pred_cancelado )
+```
+
+```{r}
+write.table(submission , file = "submission_1.csv", row.names = FALSE, sep = ",")
+```
+
+```{r}
+hist(submission$prob)
+```

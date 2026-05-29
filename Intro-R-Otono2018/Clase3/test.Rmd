@@ -1,0 +1,170 @@
+---
+title: "Test"
+author: "Adrian Tame Jacobo"
+date: "August 30, 2018"
+output: pdf_document
+---
+
+```{r}
+
+vector <- NULL
+
+for(i in 1:10){
+  vector[i] <- i
+}
+
+vector
+
+```
+
+```{r}
+
+for (i in 1:10) {
+  if (!i %% 2){
+    next
+  }
+    print(i)
+}
+
+```
+
+## While Loops
+
+while (test_expression){
+statement
+}
+
+```{r}
+
+i <- 1
+while (i < 6){
+print(i)
+i = i+1
+}
+
+```
+
+
+## If Else Condicionales
+
+if (test_expression){
+statement
+}
+
+```{r}
+
+x <- 5
+if(x > 0){
+print("Positive number")
+}
+
+```
+
+if(test_expression){
+statement1
+} else{
+statement2
+}
+
+```{r}
+
+x <- -5
+if(x > 0){
+print("Non-negative number")
+} else{
+print("Negative number")
+}
+
+```
+
+if ( test_expression1) {
+statement1
+} else if ( test_expression2) {
+statement2
+} else if ( test_expression3) {
+statement3
+} else {
+statement4
+}
+
+```{r}
+
+x <- 0
+if (x < 0) {
+print("Negative number")
+} else if (x > 0) {
+print("Positive number")
+} else
+print("Zero")
+
+```
+
+## Funciones 
+
+f <- function(<arguments>) {
+Do something interesting
+}
+
+```{r}
+
+f <- function(a) {
+a^2
+}
+
+f(2)
+
+```
+
+```{r}
+
+f <- function(a,b,c) {
+a^2
+}
+
+f(2)
+
+```
+
+```{r}
+
+f <- function(a, b) {
+print(a)
+print(b)
+}
+
+f(4)
+
+```
+
+```{r}
+
+f <- function(x, y) {
+x^2 + y / z
+}
+
+f(3,5)
+
+```
+
+```{r}
+
+make.power <- function(n) {
+pow <- function(x) {
+x^n
+}
+pow
+}
+
+cubo <- make.power(2)
+
+```
+
+```{r}
+
+
+
+```
+
+
+
+

@@ -1,0 +1,210 @@
+---
+title: "Tidymodels_MARS"
+author: "Adrian Tame Jacobo, Miguel Calvo Valente, Nelson Gil Vargas"
+date: "11/15/2021"
+output: pdf_document
+---
+
+```{r, warning=FALSE}
+# Importamos librerias 
+
+library(tidyverse)
+library(tidymodels)
+library(earth)
+library(caret)
+```
+
+```{r}
+# Cargamos datos de entrenamiento
+spam_entrena <- read_csv('./datos/spam-entrena.csv') |> 
+  mutate(spam = ifelse(spam == 0, "no_spam", "spam")) |> 
+  mutate(spam = factor(spam))
+# Cargamos datos de prueba
+spam_prueba <- read_csv('./datos/spam-prueba.csv') |> 
+  mutate(spam = ifelse(spam == 0, "no_spam", "spam")) |> 
+  mutate(spam = factor(spam)) 
+head(spam_entrena)
+```
+
+# Modelo MARS
+
+```{r}
+# modelo
+modelo_mars <- mars(mode = "classification", prod_degree = 5, prune_method = "backward") |>
+  set_engine("earth")
+# receta
+spam_receta <- recipe(spam ~ ., spam_entrena) |> 
+  step_relevel(spam, ref_level = "no_spam", skip = TRUE)
+# flujo
+spam_flujo_1 <- workflow() |> 
+  add_recipe(spam_receta) |> 
+  add_model(modelo_mars) 
+modelo_mars <- fit(spam_flujo_1, spam_entrena)
+```
+
+Podemos hacer predicciones con este modelo. Por ejemplo, en entrenamiento tenemos las predicciones de clase dan:
+
+```{r}
+# Definimos las métricas de desempeño
+metricas_spam <- metric_set(roc_auc, accuracy, sens, spec)
+
+preds_entrena <- predict(modelo_mars, spam_entrena, type = "prob") |> 
+  bind_cols(predict(modelo_mars, spam_entrena)) |> 
+  bind_cols(spam_entrena |> select(spam))
+preds_entrena |> 
+  metricas_spam(spam, .pred_no_spam, estimate = .pred_class) |> 
+  mutate(across(is_double, round, 2))
+```
+
+y en prueba: 
+
+```{r}
+preds_prueba <- predict(modelo_mars, spam_prueba, type = "prob") |> 
+  bind_cols(predict(modelo_mars, spam_prueba)) |> 
+  bind_cols(spam_prueba |> select(spam))
+preds_prueba |> 
+  metricas_spam(spam, .pred_no_spam, estimate = .pred_class) |> 
+  mutate(across(is_double, round, 2)) 
+```
+
+Y notamos el ajuste entre prueba y entrenamiento, es bastante consistente por lo que tenemos un buen ajuste.
+
+# Árboles
+
+```{r}
+spam_arbol <- decision_tree(cost_complexity = 0, 
+                            min_n = 1) |> 
+  set_engine("rpart") |> 
+  set_mode("classification") |> 
+  set_args(model = TRUE)
+# receta
+spam_receta <- recipe(spam ~ ., spam_entrena) |> 
+  step_relevel(spam, ref_level = "no_spam", skip = TRUE)
+# flujo
+spam_flujo_1 <- workflow() |> 
+  add_recipe(spam_receta) |> 
+  add_model(spam_arbol) 
+arbol_grande <- fit(spam_flujo_1, spam_entrena)
+```
+
+```{r}
+# Desempeño en training
+preds_entrena <- predict(arbol_grande, spam_entrena, type = "prob") |> 
+  bind_cols(predict(arbol_grande, spam_entrena)) |> 
+  bind_cols(spam_entrena |> select(spam))
+preds_entrena |> 
+  metricas_spam(spam, .pred_no_spam, estimate = .pred_class) |> 
+  mutate(across(is_double, round, 2))
+```
+
+```{r}
+# Desempeño en prueba
+
+preds_prueba <- predict(arbol_grande, spam_prueba, type = "prob") |> 
+  bind_cols(predict(arbol_grande, spam_prueba)) |> 
+  bind_cols(spam_prueba |> select(spam))
+preds_prueba |> 
+  metricas_spam(spam, .pred_no_spam, estimate = .pred_class) |> 
+  mutate(across(is_double, round, 2)) 
+```
+
+```{r}
+coef(modelo_mars)
+```
+
+
+# Comparando
+Las curvas de precision-recall:
+```{r}
+modelos <- list(arbol_grande = arbol_grande, mars = modelo_mars)
+prec_tbl <- map(names(modelos), function(mod_nombre){
+  predict(modelos[[mod_nombre]], spam_prueba, type = "prob") |> 
+    bind_cols(spam_prueba |> select(spam)) |> 
+    pr_curve(spam, .pred_no_spam) |> 
+    mutate(modelo = mod_nombre)
+  }) |> 
+  bind_rows()
+ggplot(prec_tbl, 
+       aes(x = recall, y = precision, colour = modelo)) + 
+ geom_path() + geom_point(size = 1) 
+```
+O las curvas ROC
+
+```{r}
+roc_tbl <- map(names(modelos), function(mod_nombre){
+  predict(modelos[[mod_nombre]], spam_prueba, type = "prob") |> 
+    bind_cols(spam_prueba |> select(spam)) |> 
+    roc_curve(spam, .pred_no_spam) |> 
+    mutate(modelo = mod_nombre)
+  }) |> 
+  bind_rows()
+ggplot(roc_tbl, 
+       aes(x = 1 - specificity, y = sensitivity, colour = modelo)) + 
+  geom_point(size= 0.5) + geom_path()
+```
+
+
+
+# Tuning
+
+```{r}
+mars2 <- earth(
+  spam ~ .,  
+  data = spam_entrena,
+  degree = 2
+)
+```
+
+```{r}
+summary(mars2) %>% .$coefficients %>% head(10)
+```
+
+```{r}
+# create a tuning grid
+hyper_grid <- expand.grid(
+  degree = 5, 
+  nprune = seq(2, 50, length.out = 10) %>% floor()
+)
+
+head(hyper_grid)
+```
+
+```{r}
+set.seed(123)  # for reproducibility
+cv_mars <- train(
+  x = subset(spam_entrena, select = -spam),
+  y = spam_entrena$spam,
+  method = "earth",
+  metric = "logloss",
+  trControl = trainControl(method = "cv", number = 10),
+  tuneGrid = hyper_grid
+)
+
+# View results
+cv_mars$bestTune
+
+cv_mars$results %>%
+  filter(nprune == cv_mars$bestTune$nprune, degree == cv_mars$bestTune$degree)
+
+ggplot(cv_mars)
+```
+
+
+# Referencias
+https://bradleyboehmke.github.io/HOML/mars.html
+
+https://parsnip.tidymodels.org/articles/articles/Examples.html#mars-earth
+
+https://tidypredict.tidymodels.org/articles/mars.html
+
+http://uc-r.github.io/mars
+
+https://bradleyboehmke.github.io/HOML/mars.html
+
+https://topepo.github.io/caret/model-training-and-tuning.html#customizing-the-tuning-process
+
+Libro Elements of Statistical Learning
+
+https://www.youtube.com/watch?v=CMZ4I09PL_I
+
+

@@ -1,0 +1,460 @@
+#+TITLE: EST-46115: Modelación Bayesiana
+#+AUTHOR: Prof. Alfredo Garbuno Iñigo
+#+EMAIL:  agarbuno@itam.mx
+#+DATE: Primavera, 2022
+:REVEAL_PROPERTIES:
+#+LANGUAGE: es
+#+OPTIONS: num:nil toc:nil timestamp:nil
+#+REVEAL_REVEAL_JS_VERSION: 4
+#+REVEAL_THEME: night
+#+REVEAL_SLIDE_NUMBER: t
+#+REVEAL_HEAD_PREAMBLE: <meta name="description" content="Modelación Bayesiana">
+#+REVEAL_INIT_OPTIONS: width:1600, height:900, margin:.2
+#+REVEAL_EXTRA_CSS: ./mods.css
+#+REVEAL_PLUGINS: (notes)
+:END:
+#+STARTUP: showall
+#+PROPERTY: header-args:R :session intro :exports both :results output org :tangle ../rscripts/00-introduccion.R :mkdirp yes :dir ../
+#+EXCLUDE_TAGS: toc latex
+
+#+BEGIN_NOTES
+*Profesor*: Alfredo Garbuno Iñigo | Primavera, 2021.\\
+*Objetivo*. Repasar notación que utilizaremos a lo largo del curso. Y a la vez, establecer la motivación de los temas que trataremos en la materia.\\
+*Lecturas recomendas*: Notas del [[https://fundamentos-est-2021.netlify.app/][curso de fundamentos]] (2022) y sección 1 de citep:Gelman2020. 
+#+END_NOTES
+
+* Contenido                                                             :toc:
+:PROPERTIES:
+:TOC:      :include all  :ignore this :depth 3
+:END:
+:CONTENTS:
+- [[#notación][Notación]]
+  - [[#variables-aleatorias][Variables aleatorias]]
+  - [[#distribución-paramétrica][Distribución paramétrica]]
+  - [[#valores-esperados][Valores esperados]]
+    - [[#abuso-de-notación][Abuso de notación]]
+  - [[#estadísticas-de-interés][Estadísticas de interés]]
+  - [[#probabilidad-condicional][Probabilidad condicional]]
+- [[#repaso-inferencia][Repaso Inferencia]]
+  - [[#regla-de-bayes][Regla de Bayes]]
+  - [[#ejemplos][Ejemplos]]
+- [[#repaso-inferencia][Repaso inferencia]]
+  - [[#ejemplo][Ejemplo]]
+  - [[#diferentes-previas-diferentes-posteriores][Diferentes previas, diferentes posteriores]]
+  - [[#diferentes-datos-diferentes-posteriores][Diferentes datos, diferentes posteriores]]
+  - [[#análisis-secuencial][Análisis secuencial]]
+  - [[#tarea][Tarea]]
+- [[#motivación][Motivación]]
+  - [[#distinción-importante][Distinción importante]]
+  - [[#por-qué-necesitamos-un-flujo-de-trabajo][¿Por qué necesitamos un flujo de trabajo?]]
+  - [[#proceso-iterativo][Proceso iterativo]]
+- [[#bibliografia][Bibliografia]]
+:END:
+
+
+* Notación
+
+Usaremos la convención usual en probabilidad. 
+
+** Variables aleatorias
+
+Una variable aleatoria $X$ está definida a través de un ~espacio de probabilidad~ $(\mathcal{X}, \mathcal{F}, \pi)$. La función $\pi: \mathcal{F}\rightarrow[0,1]$  se llama la ~función de distribución~ de la variable aleatoria $X$. Escribimos $X \sim \pi$.
+
+** Distribución paramétrica 
+
+Decimos que una función de distribución es ~paramétrica~ si se puede identificar completamente la distribución con respecto a un ~vector de parámetros~ $\theta \in \mathbb{R}^p$. Esto lo denotamos de la siguiente manera
+
+\begin{align}
+\pi_\theta(x) \qquad \text{ ó } \qquad \pi(x ; \theta)\,,
+\end{align}
+
+y si  $\theta \neq\theta'$ entonces $\pi_\theta(x) \neq \pi_{\theta'}(x)$ para cualquier $x$ en el ~soporte~.
+
+** Valores esperados
+
+El ~valor esperado~ de una variable aleatoria $X \sim \pi$ se define como
+\begin{align}
+\mathbb{E}[X] = \int_{\mathcal{X}} x \, \pi(x) \, \text{d}x\,.
+\end{align}
+
+*** Abuso de notación
+:PROPERTIES:
+:reveal_background: #00468b
+:END:
+
+La ~función de densidad~ está definida como $\text{d}\pi/\text{d}x$. En la definición de valor esperado deberíamos de haber escrito $\text{d}\pi(x)$  o bien $\pi(\text{d}x)$ (integrales de Lebesgue). Pero para no ofuscar notación, y dado que no veremos cosas exóticas en el curso, lo obviamos...
+
+** Estadísticas de interés
+La definición se puede extender con $f: \mathcal{X} \rightarrow \mathbb{R}$ y se calcula como
+\begin{align}
+\mathbb{E}[f(X)] = \int_{\mathcal{X}} f(x) \pi(x) \text{d}x\,.
+\end{align}
+#+REVEAL: split
+Denotaremos de la siguiente manera
+\begin{align}
+\pi(f) := \mathbb{E}[f(X)]\,.
+\end{align}
+
+** Probabilidad condicional
+
+La ~probabilidad condicional~ de $A$ dado el evento $B$ se denota $\pi(A|B)$ y está definida como
+\begin{align}
+\pi(A|B) = \frac{\pi(A \cap B)}{\pi(B)}
+\end{align}
+
+* Repaso Inferencia 
+
+#+BEGIN_NOTES
+Repaso de inferencia bajo un enfoque frecuentista. 
+#+END_NOTES
+
+
+#+REVEAL: split
+
+#+REVEAL: split
+** Regla de Bayes
+
+La ~regla de Bayes~ utiliza la definición de probabilidad condicional para hacer inferencia a través de 
+\begin{align}
+\pi(A|B) = \frac{\pi(B|A) \pi(A)}{\pi(B)}\,.
+\end{align}
+#+REVEAL: split
+
+#+DOWNLOADED: screenshot @ 2022-01-21 20:44:26
+#+caption: Tomado de cite:Kruschke2014 .
+#+attr_html: :width 1200 :align center
+[[file:images/20220121-204426_screenshot.png]]
+
+** Ejemplos
+
+#+ATTR_REVEAL: :frag (appear)
+- Verosimilitud: $x |\theta \sim \mathsf{Binomial}(n, \theta)$ + Previa: $\theta \sim \mathsf{Beta}(\alpha, \beta)$ = Posterior: ?
+- Verosimilitud: $x |\theta \sim \mathsf{Uniforme}(0, \theta)$ + Previa: $\theta \sim \mathsf{Pareto}(\alpha, \theta_0)$ = Posterior: ?
+
+* Repaso inferencia
+
+#+BEGIN_NOTES
+Repaso de inferencia bajo un enfoque bayesiano.
+#+END_NOTES
+
+** Ejemplo
+
+Este ejemplo fue tomado de citep:Dogucu2021.
+
+#+begin_src R :exports none :results none
+
+  ## Setup ----------------------------------------
+  library(tidyverse)
+  library(patchwork)
+  set.seed(108727)
+  ## Cambia el default del tamaño de fuente 
+  theme_set(theme_grey(base_size = 18))
+
+  ## Cambia el número de decimales para mostrar
+  options(digits = 2)
+
+  ## Ejemplo peliculas
+
+#+end_src
+
+** Diferentes previas, diferentes posteriores
+
+#+begin_src R :exports none :results none
+  ## Diferentes previas, diferentes posteriores --------------------
+#+end_src
+
+#+begin_src R :exports code 
+  modelo_beta <- function(params, n = 5000){
+    rbeta(n, params$alpha, params$beta)
+  }
+#+end_src
+
+
+#+REVEAL: split
+#+begin_src R :exports code 
+    escenarios <-
+      tibble(analista = fct_inorder(c("Ignorante", "Indiferente",
+                                      "Feminista", "Ingenuo")),
+             alpha = c(1, .5, 5, 14),
+             beta  = c(1, .5, 11, 1)) |>
+      nest(params.previa = c(alpha, beta)) |>
+      mutate(muestras.previa = map(params.previa, modelo_beta))
+#+end_src
+
+#+RESULTS:
+#+begin_src org
+#+end_src
+
+#+HEADER: :width 1200 :height 300 :R-dev-args bg="transparent"
+#+begin_src R :file images/peliculas.jpeg :exports results :results output graphics file
+  escenarios |>
+    unnest(muestras.previa) |>
+    ggplot(aes(muestras.previa)) +
+    geom_histogram(binwidth = .05) +
+    facet_wrap(.~analista, scales = "free_y", ncol = 4) +
+    xlab("Proporción de películas")
+#+end_src
+#+caption: Muestras de $\theta \sim \mathsf{Previa}$ . 
+#+RESULTS:
+[[file:../images/peliculas.jpeg]]
+
+
+#+REVEAL: split
+#+HEADER: :width 1200 :height 300 :R-dev-args bg="transparent"
+#+begin_src R :file images/peliculas_predictiva.jpeg :exports results :results output graphics file
+  escenarios |>
+    unnest(muestras.previa) |>
+    mutate(peliculas = map_dbl(muestras.previa,
+                           function(theta) rbinom(1, 33, theta))) |>
+    ggplot(aes(peliculas)) +
+    geom_histogram(binwidth = 3) +
+    facet_wrap(.~analista, scales = "free_y", ncol = 4)
+#+end_src
+#+caption: Distribución predictiva previa
+#+RESULTS:
+[[file:../images/peliculas_predictiva.jpeg]]
+
+#+REVEAL: split
+#+begin_src R  :exports none :results none
+  library(bayesrules)
+  set.seed(108727)
+  data <- bechdel |>
+    sample_n(20)
+#+end_src
+
+#+begin_src R :exports none :results none
+  data <- data |>
+    group_by(binary) |>
+    tally() |>
+    pivot_wider(names_from = binary,
+                values_from = n) |>
+    as.data.frame()
+#+end_src
+
+#+begin_src R :exports code
+  update_rule <- function(params){
+    tibble(alpha = params$alpha + data$PASS,
+           beta  = params$beta  + data$FAIL)
+  }
+  escenarios <- escenarios |>
+    mutate(params.posterior = map(params.previa, update_rule),
+           muestras.posterior = map(params.posterior, modelo_beta))
+#+end_src
+
+#+RESULTS:
+#+begin_src org
+#+end_src
+
+#+HEADER: :width 1400 :height 300 :R-dev-args bg="transparent"
+#+begin_src R :file images/peliculas_posterior.jpeg :exports results :results output graphics file
+  escenarios |>
+    pivot_longer(cols = c(muestras.previa, muestras.posterior)) |>
+    unnest(value) |>
+    ggplot(aes(value, group = name, fill = name)) +
+    geom_histogram(position = "identity", alpha = .7) +
+    facet_wrap(.~analista, ncol = 4, scales = "free_y") +
+    geom_vline(xintercept = data$PASS / 20, lty = 2) +
+    xlab("Proporción de películas")
+#+end_src
+
+#+RESULTS:
+[[file:../images/peliculas_posterior.jpeg]]
+
+#+REVEAL: split
+#+HEADER: :width 1200 :height 300 :R-dev-args bg="transparent"
+#+begin_src R :file images/peliculas-predictiva-posterior.jpeg :exports results :results output graphics file
+  escenarios |>
+   unnest(muestras.posterior) |>
+      mutate(peliculas = map_dbl(muestras.posterior,
+                             function(theta) rbinom(1, 33, theta))) |>
+      ggplot(aes(peliculas)) +
+      geom_histogram(binwidth = 3) +
+      facet_wrap(.~analista, scales = "free_y", ncol = 4)
+#+end_src
+#+caption: Predictiva posterior. 
+#+RESULTS:
+[[file:../images/peliculas-predictiva-posterior.jpeg]]
+
+** Diferentes datos, diferentes posteriores
+
+
+#+begin_src R :exports none :results none
+  ## Diferentes datos, diferentes posteriores -------------------
+#+end_src
+
+#+begin_src R  :exports none :results none
+  extrae_datos <- function(n){
+    bechdel |>
+      sample_n(n) |>
+      group_by(binary) |>
+      tally() |>
+      pivot_wider(names_from = binary,
+                  values_from = n) |>
+      as.data.frame()
+  }
+
+  update_rule <- function(data){
+      tibble(alpha = params.fem$alpha + data$PASS,
+             beta  = params.fem$beta  + data$FAIL)
+  }
+
+  params.fem <- list(alpha = 5, beta = 11)
+
+  escenarios <- tibble(id = seq(1, 4),
+         n = c(5, 20, 100, 500),
+         datos = map(n, extrae_datos))
+
+  escenarios <- escenarios |>
+    mutate(params.posterior = map(datos, update_rule),
+           muestras.posterior = map(params.posterior, modelo_beta),
+           muestras.previa    = list(modelo_beta(params.fem)))
+
+#+end_src
+
+#+RESULTS:
+#+begin_src org
+#+end_src
+
+#+HEADER: :width 1200 :height 300 :R-dev-args bg="transparent"
+#+begin_src R :file images/peliculas_datos.jpeg :exports results :results output graphics file
+  escenarios |>
+     pivot_longer(cols = c(muestras.previa, muestras.posterior)) |>
+     unnest(value) |>
+     ggplot(aes(value, group = name, fill = name)) +
+     geom_histogram(aes(y = ..density..), position = "identity", alpha = .7) +
+     facet_wrap(.~n, ncol = 4) +
+    xlab("Proporción de películas")
+#+end_src
+
+#+RESULTS:
+[[file:../images/peliculas_datos.jpeg]]
+
+** Análisis secuencial 
+
+#+HEADER: :width 1200 :height 300 :R-dev-args bg="transparent"
+#+begin_src R :file images/peliculas_historico.jpeg :exports results :results output graphics file
+  bechdel |>
+    group_by(year, binary) |>
+    tally() |>
+    pivot_wider(values_from = n,
+                names_from = binary,
+                values_fill = 0) |>
+    mutate(rate = PASS/(PASS+FAIL)) |>
+    ggplot(aes(year, rate)) +
+    geom_line() + geom_point()
+#+end_src
+#+caption: Histórico de la proporción de peliculas que pasan la prueba de Bechdel por año. 
+#+RESULTS:
+[[file:../images/peliculas_historico.jpeg]]
+
+#+REVEAL: split
+#+HEADER: :width 700 :height 300 :R-dev-args bg="transparent"
+#+begin_src R :file images/peliculas_secuencial.jpeg :exports results :results output graphics file
+  ## Analisis secuencial ------------------------------
+  library(ggridges)
+
+  tibble(period = "previa", FAIL = 0, PASS = 0) |>
+    rbind(bechdel |>
+          mutate(period = cut(year, breaks = 5)) |>
+          group_by(period) |>
+          sample_frac(.3) |>
+          ungroup() |>
+          group_by(period, binary) |>
+          tally() |>
+          ungroup() |>
+          pivot_wider(values_from = n,
+                      names_from = binary,
+                      values_fill = 0)) |>
+    summarise(period = fct_inorder(period),
+              pass = cumsum(PASS),
+              fail = cumsum(FAIL),
+              rate = pass/(pass + fail),
+              alpha = 5 + pass,
+              beta  = 11 + fail) |>
+    nest(params = c(alpha, beta)) |>
+    mutate(muestras = map(params, modelo_beta)) |>
+    unnest(muestras, params) |>
+    ggplot(aes(muestras, period)) +
+    geom_density_ridges(stat = "binline", bins = 40) +
+    geom_point(aes(x = pass/(pass + fail), y = period), fill = 'lightblue', shape = 23, size = 5) +
+    ## geom_point(aes(x = alpha/(alpha + beta), y = period), fill = 'red', shape = 23, size = 5) + 
+    xlim(0,1) + xlab("Tasa de éxito")
+#+end_src
+#+caption: La posterior de hoy puede ser la previa de mañana. 
+#+RESULTS:
+[[file:../images/peliculas_secuencial.jpeg]]
+
+** Tarea
+
+Echenle un ojo a la sección 5.2 de [[https://www.bayesrulesbook.com/][Bayes rules!]] donde se expone a detalle un modelo más del análisis conjugado. ¿Puedes identificar/derivar la distribución predictiva?
+
+
+* Motivación
+
+Por medio de metodología Bayesiana podemos cuantificar incertidumbre en:
+#+ATTR_REVEAL: :frag (appear)
+- Observaciones. 
+- Parámetros. 
+- Estructura. 
+
+#+REVEAL: split
+  Es fácil especificar y ajustar modelos. Pero hay preguntas cuyas respuestas no han quedado claras:
+#+ATTR_REVEAL: :frag (appear)
+  1. Construcción. 
+  2. Evaluación. 
+  3. Uso.
+
+  #+BEGIN_NOTES
+  Programación probabilística. 
+  #+END_NOTES
+
+
+#+REVEAL: split
+Los aspectos del flujo de trabajo Bayesiano consideran (citep:Gelman2020):
+#+ATTR_REVEAL: :frag (appear)
+1. Construcción iterativa de modelos. 
+2. Validación de modelo (computacional).
+3. Entendimiento de modelo. 
+4. Evaluación de modelo.   
+
+** Distinción importante
+
+~Inferencia~ no es lo mismo que ~análisis de datos~ o que un ~flujo de trabajo~. 
+
+#+BEGIN_NOTES
+
+Inferencia (en el contexto bayesiano) es formular y calcular con probabilidades
+condicionales.
+
+#+END_NOTES
+
+** ¿Por qué necesitamos un flujo de trabajo?
+
+#+ATTR_REVEAL: :frag (appear)
+- El cómputo puede ser complejo.
+- Expandir nuestro entendimiento en aplicaciones.
+- Entender la relación entre modelos.
+- Distintos modelos pueden llegar a distintas conclusiones.
+
+** Proceso iterativo
+
+- La gente de ML sabe que el proceso de construcción de un modelo es iterativo, ¿por qué no utilizarlo?
+
+#+BEGIN_NOTES
+
+Una posible explicación puede encontrarse en citep:Gelman2021. El argumento es formal en cuanto a actualizar nuestras creencias como bayesianos. Sin embargo, con cuidado y un procedimiento científico puede resolver el asunto. 
+
+#+END_NOTES
+
+
+#+DOWNLOADED: screenshot @ 2022-01-21 23:09:51
+#+caption: Tomado de citep:Gelman2020.
+#+attr_html: :width 800 :align center
+[[file:../images/20220121-230951_screenshot.png]]
+
+* Bibliografia                                                        :latex:
+
+bibliographystyle:abbrvnat 
+bibliography:references.bib
+
+

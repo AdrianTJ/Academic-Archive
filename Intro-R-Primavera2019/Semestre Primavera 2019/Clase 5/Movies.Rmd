@@ -1,0 +1,209 @@
+---
+title: "Movies"
+author: "Jorge de la Vega"
+date: "23 de agosto de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Estudio de caso: Datos de películas
+
+Haremos un ejemplo de análisis considerando los datos sobre películas que se puede encontrar en [Kaggle](https://www.kaggle.com/rounakbanik/the-movies-dataset). En particuar se hará un análisis exploratorio sobre el archivo llamado movies_metadata.csv. 
+
+## Guía de inicio rápido
+Para comenzar con el análisis, podemos seguir los siguientes pasos:
+
+### Preeliminares
+
+- Determina el contexto:
+  - ¿Cuáles son los objetivos del estudio?
+  - ¿Que tienen los datos?
+- Preparar los datos
+  - Formateo almacenamiento
+  - uniendo y cruzando
+
+### Variables
+
+- ¿Qué tipos de datos se tienen?
+  - nominales, ordinales, continuos, espaciales,...
+- ¿Qué propiedades tienen los datos?
+  - hacer gráficas individuales
+  - rangos, categorías valores perdidos, outliers, etc.
+- Evaluar la calidad de los datos y limpiarlos
+- Revisar consistencia y plausibilidad (¿son ciertos valores posibles?)
+  
+### Primer análisis
+
+- Usar varias gráficas básicas juntas
+  - barras, histogramas, scatterplots, ...
+- Explorar los datos utilizando interacción
+  - haciendo extracciones
+  - ligando
+  - reformateando
+- Resumir las propiedades de baja dimensión de los datos
+
+### Vistas multivariadas
+
+- Elegir subconjuntos de variables que sean relevantes a los objetivos
+- Hacer gráficas multivariadas
+  - coordenadas paralelas, scatterplot matrices, para las variables continuas
+  - variaciones de gráficas de mosaico para las variables discretas
+  - usar color, símbolos, tamaño, para combinar variables continuas con discretas
+- Explorar utilizando interacción: ordenamiento, zooming, etc.
+- Identificar estructuras en dimensiones mayores
+
+### Agrupar y seleccionar
+
+- Condicionar en variables de agrupación y comparar subconjuntos
+  - boxplots por variable/variables agrupantes
+  - gráficas trellis
+- Considerar subconjuntos interesantes seleccionados aparte
+
+### Características especiales
+
+- Reducir el conjunto de datos
+  - agregar datos por grupos o clusters (reducción de casos)
+  - combinar variables relacionadas (reducción en dimensión)
+- Utilizar  cualquier estructura tempora (gráficas de series de tiempo)
+- Ligar a mapas si hay información espacial
+
+### Presentar resultados
+
+- Elegir las gráficas que muestran las principales conclusiones.
+- Pulir las gráficas
+  - escalas, orden, tamaño, razón de aspecto, colores, configuración
+- Asegurarse de que todas las gráficas están completamente explicadas y documentadas
+  - legendas, subtítulos, ejes, anotaciones, texto y encabezados
+  
+## Dato de películas
+El archivo movies_metadata.csv  contiene información sobre 45,466 películas que se encuentran en el conjunto de datos completo de MovieLens. Algunos de sus atributos que tiene son los siguientes:
+
+- adult: si es una película para adultos
+- genre: clasificaciones por géneros de las películas (pueden ser varios, json)
+- budget: Presupuesto invertido
+- popularity: índice de popularidad de la película
+- release_date: fecha de lanzamiento
+- revenue: ganancias
+- runtime: tiempo de duración (en minutos)
+- vote_average: calificación promedio de la película
+- title: titulo de la película
+
+## Preguntas iniciales
+
+- ¿Hay patrones de datos faltantes en los datos?
+- ¿Cuál es la distribución del voto promedio?
+- ¿Las películas más recientes obtienen más votos que las anteriores?
+- ¿Qué tipo de voto obtienen las películas de acción?
+- ¿Cómo son evaluados las películas de corta duración con respecto a las de larga duración?
+- ¿Qué género de película son las que duran más?
+- ¿Qué combinación de tipos de película hay?
+- ¿Qué títulos de películas aparecen con mayor frecuencia, y cómo se distribuyen por años?
+
+## Manipulación de datos
+
+Para cargar los datos y ver qué estructura tienen, notamos que algunas columnas que son relevantes para nosotros tienen una estructura en formato _json_, por ejemplo la variable `genres`.  Esas variables necesitarán un poco más de manipulación para poderse analizar. 
+
+También algunas variables numéricas son interpretadas como caractéres, posiblemente porque los datos tienen algun problema.
+
+```{r}
+movies <- read.csv("~/Proyects/Intro-R-Primavera2019/Semestre Primavera 2019/Clase 5/movies_metadata.csv",quote="\"",stringsAsFactors = F,as.is = T,fileEncoding = "UTF-8")
+str(movies)
+head(movies$genres)
+```
+
+Considerando las preguntas que tenemos, podemos intentar simplificar el archivo a las variables que necesitamos, y quitar el archivo que nos sobra
+
+```{r}
+library(dplyr)
+movies2 <- movies %>% select(adult,budget,genres,title,vote_average,vote_count,runtime,revenue)
+head(movies2)
+rm(movies)
+```
+
+
+Para convertir la variable de géneros a una lista con los datos relevantes, podemos usar el paquete RJSON. 
+Noten que la cadena de json tiene un problema: json debe tener comillas dobles para los keys, por lo que se requiere cambiarlos. Por ejemplo, tratar de hacerlo directo da un error:
+
+```{r}
+library(rjson)
+#fromJSON(movies2$genres[1])
+```
+
+Podemos usar la función `chartr` (después de consultar en internet el tipo de error) para hacer el reemplazo y podemos ponerlo como un vector:
+
+```{r}
+unlist(fromJSON(chartr("\'\"","\"\'",movies2$genres[1])))
+```
+y nos podemos quedar sólo con la parte que corresponde a los géneros que nos interesan, haciendo dos partes:
+
+```{r}
+z <- lapply(lapply(movies2$genres,function(x)unlist(fromJSON(chartr("\'\"","\"\'",x)))),function(x)x[names(x)=="name"])
+z[1:2]
+```
+¿Cuál es el número máximo de géneros que tiene una película?
+
+```{r}
+a <- max(unlist(lapply(z,function(x)length(x))))
+z[which(unlist(lapply(z,function(x)length(x)))==8)]
+movies2$title[which(unlist(lapply(z,function(x)length(x)))==8)]
+```
+
+Podemos agregar columnas de los primeros 5 géneros como columnas a la base de datos:
+
+```{r}
+movies2 <- movies2 %>% mutate(genero1 = lapply(z,function(x)ifelse(length(x)==0,NA,x[1])),
+                              genero2 = lapply(z,function(x)ifelse(length(x)==0,NA,x[2])),
+                              genero3 = lapply(z,function(x)ifelse(length(x)==0,NA,x[3])),
+                              genero4 = lapply(z,function(x)ifelse(length(x)==0,NA,x[4])),
+                              genero5 = lapply(z,function(x)ifelse(length(x)==0,NA,x[5]))) %>%
+          select(-genres)
+head(movies2)
+```
+
+`adult` es una variable categórica, pero no está claro qué valores tiene
+
+```{r}
+table(movies2$adult)
+```
+Claramente hay tres valores que no corresponden correctamente al valor de la variable. ¿Qué registros son esos? Para el análisis posiblemente haya que quitarlos
+
+```{r}
+casos_malos <- which(!(movies2$adult %in% c("True","False")))
+movies2[casos_malos,]
+movies2 <- movies2 %>% filter(adult %in% c("True","False"))
+```
+
+¿Cuáles son las películas para adultos?
+
+```{r}
+movies2[movies2$adult=="True","title"]
+```
+
+
+Con las variables cuantitativas es más fácil trabajar. POr ejemplo con el presupuesto, podemos obtener las estadísticas básicas y hacer las gráficas indivduales, pero hay que convertirla a variable numérica, y de hecho podemos identificar algunos problemas de calidad de los datos (posiblemente una mala estructuración del archivo).
+
+```{r}
+movies2$budget <- as.numeric(movies2$budget)
+summary(movies2$budget)
+movies2[which(is.na(movies2$budget)),]
+```
+Podemos eliminar esos registros, bajo el supuesto de que el archivo es correcto. Esto implica rehacer la lista con los géneros para mantener la correspondencia.
+
+```{r}
+movies <- read.csv("~/Proyects/Intro-R-Primavera2019/Semestre Primavera 2019/Clase 5/movies_metadata.csv",quote="\"",stringsAsFactors = F,as.is = T,fileEncoding = "UTF-8")
+movies <- movies[-which(is.na(as.numeric(movies$budget))),]
+budget <- as.numeric(movies$budget)
+```
+
+```{r}
+head(movies2)
+```
+
+
+
+
+
+

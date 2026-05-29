@@ -1,0 +1,4 @@
+*.DS_Store
+IMDb_Extensive_Dataset/
+The_Movies_Dataset/
+.venv/
