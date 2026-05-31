@@ -1,41 +1,85 @@
-# Academic Archive: The Digital Attic 🎓
+# Academic Portfolio: Statistics, Data Science, and Optimization
 
-Welcome to my academic archive. This is essentially a curated collection of my journey through various courses, projects, and late-night coding sessions, primarily centered around my time at ITAM. 
+A comprehensive collection of academic projects, research, and technical notes developed during my studies at ITAM. This repository demonstrates proficiency in statistical modeling, machine learning, and data engineering using R and Python.
 
-It’s a mix of R, Python, Bayesian statistics, and a surprising amount of cocktail-related data science.
+## 🚀 Featured Projects
 
-## What's Inside? 📂
+### [Bookish Journey](./bookish-journey)
+A production-grade cocktail recommendation system.
+- **Tech Stack:** Python, GCP (Vertex AI, BigQuery, GCS), Apache Airflow.
+- **Highlights:** Implemented a hybrid recommendation engine with automated ELT pipelines and cloud-based inference.
 
-Think of this as a map to the chaos. Each folder represents a specific chapter of my academic life:
+### [Optimization & BFGS](./Proyecto_final_opt_eq_4)
+Implementation of the BFGS algorithm for logistic regression.
+- **Focus:** Numerical optimization and large-scale statistical learning.
+- **Implementation:** Custom Python implementation of second-order optimization methods.
 
-### 🍹 The Big Projects
-*   **[bookish-journey](./bookish-journey):** *How We Learned to Stop Worrying and Love Cocktails.* A full-blown cocktail recommendation system built with Python, GCP (Vertex AI, BigQuery, Airflow), and a lot of unsupervised learning. 
-*   **[Proyecto_final_opt_eq_4](./Proyecto_final_opt_eq_4):** An implementation of the BFGS algorithm for logistic regression. Heavy on optimization, light on sleep.
-*   **[ProjectoFinalEA3](./ProjectoFinalEA3):** Estimating NYC Taxi fares using Applied Statistics techniques. Lots of maps and histograms.
-*   **[Aprendizaje_MARS](./Aprendizaje_MARS):** Diving deep into Multivariate Adaptive Regression Splines (MARS).
+### [NYC Taxi Fare Estimation](./ProjectoFinalEA3)
+Statistical analysis of urban mobility data.
+- **Focus:** Applied Statistics and Geospatial Analysis.
+- **Outcome:** Predictive models for fare estimation using regression techniques and spatial visualization.
 
-### 📈 Statistics & Machine Learning
-*   **[fundamentos](./fundamentos):** Notes and code for *Fundamentals of Statistics with Resampling*. Covers everything from Maximum Likelihood to Bootstrap.
-*   **[modelacion-bayesiana](./modelacion-bayesiana):** Bayesian modeling notes, including Stan, Docker setups, and MCMC.
-*   **[metodos-analiticos](./metodos-analiticos):** A grab-bag of analytical methods, exams, and scripts from various semesters.
-*   **[Estadistica-Computacional-fall2021](./Estadistica-Computacional-fall2021):** Computational statistics materials from Fall 2021.
-*   **[Hoteles_Aprendizaje](./Hoteles_Aprendizaje):** Machine learning models (Random Forests, Boosted Trees) applied to hotel booking data.
-*   **[Mineria_Proyecto](./Mineria_Proyecto):** My project for Data Mining.
+### [Multivariate Adaptive Regression Splines (MARS)](./Aprendizaje_MARS)
+In-depth exploration of non-parametric regression.
+- **Focus:** Model interpretability and non-linear relationship mapping using MARS.
 
-### 📚 The R Chronicles
-*   **[Intro-R-Otono2018](./Intro-R-Otono2018) / [Intro-R-Primavera2019](./Intro-R-Primavera2019):** Where the R journey began. Basic scripts, class notes, and early experiments.
-*   **[Diplomado2019](./Diplomado2019):** Materials from a 2019 Diploma course.
+---
 
-## Tech Stack 🛠️
+## 📂 Repository Structure
 
-If you see a lot of `.Rmd` files, don't be surprised. This archive is heavily R-based, but you'll find plenty of other tools:
+### Machine Learning & Applied Statistics
+*   **[Hoteles_Aprendizaje](./Hoteles_Aprendizaje):** Predictive modeling for hotel cancellations using Random Forests and Gradient Boosting.
+*   **[Mineria_Proyecto](./Mineria_Proyecto):** End-to-end data mining project covering EDA, feature engineering, and model selection.
+*   **[Aprendizaje_MARS](./Aprendizaje_MARS):** Research and application of MARS algorithms.
 
-*   **Languages:** R (Tidyverse, Tidymodels), Python (Pandas, Scikit-learn).
-*   **Environment:** `renv` for R dependency management, Docker for reproducible notes, and some GCP for the larger projects.
-*   **Frameworks:** Bookdown for course notes, Airflow for orchestration.
+### Advanced Statistical Theory
+*   **[fundamentos](./fundamentos):** Fundamentals of Statistics focusing on resampling methods (Bootstrap, Permutation), MLE, and hypothesis testing.
+*   **[modelacion-bayesiana](./modelacion-bayesiana):** Bayesian inference, hierarchical modeling, and MCMC using Stan.
+*   **[verse-bayesian](./verse-bayesian):** Environment configurations and research notes for Bayesian workflows.
 
-## Disclaimer ⚠️
+### Computational Statistics & Methodology
+*   **[metodos-analiticos](./metodos-analiticos):** Collection of analytical methods, including exams and research scripts.
+*   **[Estadistica-Computacional-fall2021](./Estadistica-Computacional-fall2021):** Materials focused on simulation, optimization, and computational intensive methods.
 
-This is an **archive**. Some things might require specific Docker images or older versions of R packages to run perfectly. It’s more of a reference (and a memory trip) than a production-ready repository.
+### Academic Foundations
+*   **[Intro-R-Otono2018](./Intro-R-Otono2018) / [Intro-R-Primavera2019](./Intro-R-Primavera2019):** Core R programming foundations and exploratory data analysis.
+*   **[Diplomado2019](./Diplomado2019):** Specialized coursework from the 2019 Data Science Diploma.
 
-Feel free to browse around, but mind the dust! 🧹
+---
+
+## 🛠️ Tech Stack & Competencies
+
+*   **Languages:** R (Tidyverse, Tidymodels, Stan), Python (Pandas, Scikit-learn, PyTorch).
+*   **Infrastructure:** Docker, Google Cloud Platform (Vertex AI, BigQuery, GCS).
+*   **Orchestration:** Apache Airflow.
+*   **Reproducibility:** `renv` (R dependency management), Virtual Environments (Python).
+*   **Reporting:** RMarkdown, Bookdown, LaTeX.
+
+---
+
+## ⚙️ Environment Setup
+
+This repository is designed for reproducibility. You can set up the environment using either Docker or local package managers.
+
+### Docker (Recommended)
+Build and run the provided Docker image to get a fully configured R/Python environment:
+```bash
+docker build -t academic-archive .
+docker run -p 8787:8787 -e PASSWORD=your_password academic-archive
+```
+
+### Local Setup
+1.  **R Environment:** Restore dependencies using `renv`:
+    ```r
+    install.packages("renv")
+    renv::restore()
+    ```
+2.  **Python Environment:** Install requirements:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+---
+
+## 📝 Disclaimer
+This repository serves as an academic archive. While most projects are self-contained, some may require specific cloud credentials or legacy dependencies. It is intended for reference and research purposes.
