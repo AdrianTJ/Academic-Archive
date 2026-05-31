@@ -1,5 +1,48 @@
+# History files
 .Rhistory
-.Rproj.user
-.DS_Store
+.Rapp.history
 
-	
+# Session data files
+.RData
+.RDataTmp
+.RData.*
+.Ruserdata
+
+# Example: if you use RStudio
+.Rproj.user/
+
+# Output files from R packages
+/*.Rcheck/
+
+# Renv
+renv/library/
+renv/python/
+renv/staging/
+renv/local/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# RMarkdown / Bookdown artifacts
+*_files/
+*_cache/
+*.utf8.md
+*.knit.md
+
+# OS-specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Misc
+*.log
