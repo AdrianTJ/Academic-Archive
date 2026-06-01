@@ -62,21 +62,23 @@ In-depth exploration of non-parametric regression.
 This repository is designed for reproducibility. You can set up the environment using either Docker or local package managers.
 
 ### Docker (Recommended)
-Build and run the provided Docker image to get a fully configured R/Python environment:
+Build and run the provided Docker image from the `setup/` directory to get a fully configured R/Python environment:
 ```bash
-docker build -t academic-archive .
+docker build -t academic-archive setup/
 docker run -p 8787:8787 -e PASSWORD=your_password academic-archive
 ```
 
 ### Local Setup
+If you prefer to set up the environment locally, you can use the shared dependency files located in the `setup/` directory:
+
 1.  **R Environment:** Restore dependencies using `renv`:
     ```r
     install.packages("renv")
-    renv::restore()
+    renv::restore(lockfile = "setup/renv.lock")
     ```
 2.  **Python Environment:** Install requirements:
     ```bash
-    pip install -r requirements.txt
+    pip install -r setup/requirements.txt
     ```
 
 ---
