@@ -1,64 +1,28 @@
-# Diplomado 2019
-Sesiones de R para el diplomado de estadistica impartido en el ITAM. 
+# Diplomado (2019)
 
-Para Windows, OS X o ciertas distribuciones de Linux, este paso es el mismo:
+Este repositorio contiene las sesiones de R para el Diplomado de Estadística impartido en el ITAM en 2019. El material está diseñado para cubrir desde el control de flujo básico hasta el modelado de distribuciones de probabilidad y procesamiento de datos.
 
-- Para instalar *R* [aquí](https://cran.itam.mx/).
-- Para instalar *RStudio* [aquí](https://www.rstudio.com/products/rstudio/download/#download).
+## 📚 Temas Cubiertos
+Las sesiones están organizadas de forma lógica para avanzar en la complejidad del lenguaje y la teoría estadística:
+- **Control de Flujo y Lógica:** Bucles `while` y `for`, sentencias condicionales `if`, `else if` y `else`.
+- **Programación Funcional:** Definición de funciones, manejo de argumentos y funciones de orden superior (closures).
+- **Probabilidad y Distribuciones:** Uso exhaustivo de las funciones `d`, `p`, `q` y `r` para:
+    - **Discretas:** Binomial, Geométrica y Poisson.
+    - **Continuas:** Uniforme, Exponencial, Normal y Gamma.
+- **Procesamiento de Datos:** Unión de dataframes (`merge`), agregación de datos (`aggregate`), limpieza y manejo de valores nulos.
+- **Análisis Exploratorio:** Estadísticas descriptivas, tablas de resumen y visualizaciones básicas (histogramas, boxplots).
 
-Para poder utilizar *RMarkdown* es necesario contar con una distribución TeX:
-
-- Para Windows: [MiXTeX](https://miktex.org/download)
-- Para OS X: [MacTeX](http://www.tug.org/mactex/downloading.html)
-- En Linux la distribución más común es TeX Live. Platicarlo.
+## 📂 Estructura del Material
+- **`Sesiones/`**: Contiene scripts de R (`Sesion1.R` a `Sesion8.R`) con ejercicios prácticos y análisis de datasets como `Iris`, `mtcars`, `Davis` y metadatos de películas.
 
 ---
 
-Temario: 
+## ⚙️ Configuración Requerida
 
-- Sesion 1
-  * Instalar R 
-  * RStudio
-  * Help
-  * Paquetes [Lista](https://cran.r-project.org/web/packages/available_packages_by_name.html)
-  * Calculos (sencillos)
-  * Variables
-- Sesion 2 
-  * Vectores
-  * Matrices
-  * Listas
-  * Data Frames 
-  * Summary
-- Sesion 3
-  * Lectura de datos
-  * Distintos tipos de datos
-  * Lectura de excel
-  * Estructura de datos en la computadora en general
-- Sesion 4
-  * For
-  * While
-  * If
-  * Variables respuesta y entrada
-  * Funciones
-  * Funciones de distribucion
-  * Plots basicas
+Para instalar *R* [aquí](https://cran.itam.mx/).
+Para instalar *RStudio* [aquí](https://www.rstudio.com/products/rstudio/download/#download).
 
-- Sesiones 5 y 6
-  * Plots
-  
-- Sesion 7 
-  * Ejemplo Práctico: Dataset de Iris
-
-- Sesion 8
-  * Manipulacion de data sets mas avanzada
-  * Ejemplo de movies.csv
-  
-- Sesion 9
-  * Continuacion de movies.csv
-  
-- Sesion 10 
-* Ejemplos de data de vida real
-* Ejemplo de modelo de regresion con datos de vida real
-* Comienzo de simulacion
-
-  ---
+Para poder utilizar *RMarkdown* es necesario contar con una distribución TeX:
+- Para Windows: [MiXTeX](https://miktex.org/download)
+- Para OS X: [MacTeX](http://www.tug.org/mactex/downloading.html)
+- En Linux la distribución más común es TeX Live.
