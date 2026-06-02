@@ -1,51 +1,29 @@
-# Intro-R
-Cosas del curso de introducción a R impartido en el semestre de Primavera 2019 en el ITAM.
+# Intro-R (Primavera 2019)
 
-Para Windows, OS X o ciertas distribuciones de Linux, este paso es el mismo:
+Este repositorio contiene el material y los ejercicios para el curso de Introducción a R impartido en el ITAM durante el semestre de Primavera 2019.
 
-- Para instalar *R* [aquí](https://cran.itam.mx/).
-- Para instalar *RStudio* [aquí](https://www.rstudio.com/products/rstudio/download/#download).
+## 📚 Temas Cubiertos
+El curso ofrece una introducción exhaustiva a R, estructurada en clases progresivas:
+- **Clase 1: Fundamentos:** Instalación de paquetes, operaciones básicas, tipos de variables (numeric, character, logical, raw, complex, date) y estructuras de datos (vectores).
+- **Clase 2 & 3: Manejo de Datos:** Introducción al `tidyverse`, filtrado, selección y transformación de tablas de datos.
+- **Clase 4 & 5: Visualización y Análisis:**
+    - Gráficos avanzados con `ggplot2` (qplot, densidades, dispersión).
+    - Uso de facetas y capas estadísticas (líneas de regresión).
+    - Manejo de factores y etiquetas.
+    - Análisis exploratorio con datasets clásicos (`mtcars`).
 
-Para poder utilizar *RMarkdown* es necesario contar con una distribución TeX:
-
-- Para Windows: [MiXTeX](https://miktex.org/download)
-- Para OS X: [MacTeX](http://www.tug.org/mactex/downloading.html)
-- En Linux la distribución más común es TeX Live. Platicarlo.
+## 📂 Estructura del Material
+- **`Semestre Primavera 2019/`**: Contiene carpetas organizadas por clase (`Clase 1` a `Clase 5`) con scripts de R, archivos RMarkdown y documentos compilados en PDF/HTML.
+- **`Archivos Barrios/`**: Material adicional y ejemplos prácticos.
 
 ---
 
-Temario: 
+## ⚙️ Configuración Requerida
 
-- Dia 1
-  * Instalar R 
-  * RStudio
-  * Help
-  * Paquetes [Lista](https://cran.r-project.org/web/packages/available_packages_by_name.html)
-  * Calculos (sencillos)
-  * Variables
-- Dia 2 
-  * Vectores
-  * Matrices
-  * Listas
-  * Data Frames 
-  * Summary
-- Dia 3
-  * For
-  * While
-  * If
-  * Variables respuesta y entrada
-  * Funciones
-  * Funciones de distribucion
-  * Plots basicas
-- Dia 4
-  * Ggplot2
-  * Limpiar datos con dplyr, tidyr
-  * Modelos Lineales basicos
-- Dia 5 
-  * Simulacion
-  * Modelos Lineales 
-  * Clustering
-  
-  ---
-  
-  Luego se meterá la estructura al repositorio.
+Para instalar *R* [aquí](https://cran.itam.mx/).
+Para instalar *RStudio* [aquí](https://www.rstudio.com/products/rstudio/download/#download).
+
+Para poder utilizar *RMarkdown* es necesario contar con una distribución TeX:
+- Para Windows: [MiXTeX](https://miktex.org/download)
+- Para OS X: [MacTeX](http://www.tug.org/mactex/downloading.html)
+- En Linux la distribución más común es TeX Live.
