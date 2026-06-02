@@ -1,50 +1,29 @@
-# Intro-R
-Cosas del curso de introducción a R impartido en el semestre de Otoño 2018 en el ITAM.
+# Intro-R (Otoño 2018)
 
-Para Windows, OS X o ciertas distribuciones de Linux, este paso es el mismo:
+Este repositorio contiene el material y los ejercicios para el curso de Introducción a R impartido en el ITAM durante el semestre de Otoño 2018.
 
-- Para instalar *R* [aquí](https://cran.itam.mx/).
-- Para instalar *RStudio* [aquí](https://www.rstudio.com/products/rstudio/download/#download).
+## 📚 Temas Cubiertos
+El curso cubre los fundamentos de la programación en R y el análisis de datos, con un enfoque particular en el ecosistema `tidyverse`:
+- **Fundamentos de R:** Tipos de datos, vectores, listas y manejo de factores.
+- **Manipulación de Datos:** Uso de `dplyr` y `tidyr` para limpiar y transformar bases de datos.
+- **Visualización:** Gráficos avanzados con `ggplot2`, incluyendo:
+    - Histogramas y curvas de densidad.
+    - Gráficos de dispersión con líneas de regresión.
+    - Facetado (faceting) para comparaciones multidimensionales.
+    - Boxplots y visualización de distribuciones.
+- **R Markdown:** Creación de reportes dinámicos y reproducibles.
 
-Para poder utilizar *RMarkdown* es necesario contar con una distribución TeX:
-
-- Para Windows: [MiXTeX](https://miktex.org/download)
-- Para OS X: [MacTeX](http://www.tug.org/mactex/downloading.html)
-- En Linux la distribución más común es TeX Live. Platicarlo.
+## 📂 Estructura del Material
+- **`Clase3/`, `Tame/`**: Notas de clase y archivos RMarkdown con ejemplos prácticos utilizando datasets como `mtcars` y metadatos de películas.
 
 ---
 
-Temario tentativo: 
+## ⚙️ Configuración Requerida
 
-- Dia 1
-  * Instalar R 
-  * RStudio
-  * Help
-  * Paquetes
-  * Calculos (sencillos)
-  * Variables
-- Dia 2 
-  * Vectores
-  * Matrices
-  * Listas
-  * Data Frames 
-  * Summary
-- Dia 3
-  * For
-  * While
-  * If
-  * Variables respuesta y entrada
-  * Funciones
-- Dia 4
-  * Funciones de distribucion
-  * Plots
-- Dia 5
-  * Ggplot2
-  * Tidy?
-- Dia 6 
-  * Día Libre 
-  * Linear Models 
-  
-  ---
-  
-  Luego se meterá la estructura al repositorio.
+Para instalar *R* [aquí](https://cran.itam.mx/).
+Para instalar *RStudio* [aquí](https://www.rstudio.com/products/rstudio/download/#download).
+
+Para poder utilizar *RMarkdown* es necesario contar con una distribución TeX:
+- Para Windows: [MiXTeX](https://miktex.org/download)
+- Para OS X: [MacTeX](http://www.tug.org/mactex/downloading.html)
+- En Linux la distribución más común es TeX Live.
