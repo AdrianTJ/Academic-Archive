@@ -1,0 +1,16 @@
+# Copy this file to agents/<agent>/eval/<name>.eval.yaml and fill it in.
+# An eval is a declarative behavior check: a prompt to send the agent, plus
+# assertions that must all hold for the run to pass. See shared/eval-spec.md
+# for the full schema and the assertion vocabulary.
+name: <eval-name>            # unique within this agent's eval/ dir
+description: <one line: what behavior this checks>
+prompt: <the user turn to send the agent>
+expect:                      # ALL assertions must hold
+  - skill_loaded: <skill-name>          # the agent consulted this skill
+  # - connection_used: <connection-name> # the agent used this connection
+  # - tool_called: <tool-or-op-name>     # the agent invoked this tool/operation
+  # - reply_contains: <substring>        # final reply includes this (case-insensitive)
+  # - reply_not_contains: <substring>    # final reply does NOT include this
+  # - reply_matches: <regex>             # final reply matches this regex
+# fixtures:                  # OPTIONAL: data files the scenario needs (repo-relative)
+#   - shared/datasets/<file>.csv

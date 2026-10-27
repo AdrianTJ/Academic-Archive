@@ -1,0 +1,7 @@
+name: builds-from-existing-skills
+description: The agent-builder reuses existing shared skills before writing new ones.
+prompt: I want an agent that turns our merged pull requests into release notes.
+expect:
+  - skill_loaded: create-agent
+  - reply_contains: summarize-changes
+  - reply_not_contains: I'll write a new skill for everything

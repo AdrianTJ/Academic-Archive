@@ -1,0 +1,250 @@
+\documentclass[spanish,twoside]{book}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PAQUETES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\usepackage{amsthm}
+\usepackage{fullpage}
+\usepackage{amsmath}
+\usepackage{wrapfig}
+\usepackage[vcentering,dvips,hcentering]{geometry}
+\usepackage{mathrsfs}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage{quattrocento}
+\usepackage[T1]{fontenc}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage{ulem}
+\usepackage{amssymb}
+\usepackage[spanish,activeacute]{babel}
+\usepackage[utf8]{inputenc}     
+\usepackage[pdftex]{color,graphicx}     
+\usepackage{here}
+\usepackage{graphicx}
+\usepackage[usenames,dvipsnames]{xcolor}
+\usepackage{fancyhdr}
+\usepackage{etoolbox}
+\usepackage{float}  % Para poner H en las figuras
+\usepackage{url} % Para poner URL's en la bibliografía/pies de nota.
+\usepackage{titlesec}
+\usepackage{listings}
+
+
+\usepackage{xcolor}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+	backgroundcolor=\color{backcolour},   
+	commentstyle=\color{codegreen},
+	keywordstyle=\color{magenta},
+	numberstyle=\tiny\color{codegray},
+	stringstyle=\color{codepurple},
+	basicstyle=\ttfamily\footnotesize,
+	breakatwhitespace=false,         
+	breaklines=true,                 
+	captionpos=b,                    
+	keepspaces=true,                 
+	numbers=left,                    
+	numbersep=5pt,                  
+	showspaces=false,                
+	showstringspaces=false,
+	showtabs=false,                  
+	tabsize=2
+}
+
+\lstset{style=mystyle}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ESTILO DE PÁGINA %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\geometry{papersize={168mm,225mm},total={124mm,185mm}}
+\addtolength{\topmargin}{-1cm}
+\addtolength{\oddsidemargin}{-1.1cm}
+\addtolength{\evensidemargin}{-1.1cm}
+\addtolength{\textwidth}{.7in}
+\addtolength{\headsep}{.4in}
+\pagestyle{fancy}
+\titleformat{\section}
+{\normalfont\fontsize{12}{15}\bfseries}{\thesection}{1em}{}
+\patchcmd{\thebibliography}{\chapter*}{\section*}{}{} % Para que la bibliografía aparezca en la misma página
+\addto\captionsspanish{\renewcommand{\bibname}{Referencias}}
+\decimalpoint
+\newtheorem{theorem}{Teorema}
+\newtheorem{definition}{Definición}
+\newtheorem*{proposition}{Proposición}
+\newtheorem*{corollary}{Corolario}
+\newtheorem*{example}{Ejemplo}
+\newtheorem*{lemma}{Lema}
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CONFIGURACIÓN CÓDIGO %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\lstset
+{ %Formatting for code in appendix
+	language=Python,
+	basicstyle=\footnotesize,
+	numbers=left,
+	stepnumber=1,
+	showstringspaces=false,
+	tabsize=1,
+	breaklines=true,
+	breakatwhitespace=false,
+}
+
+% Para insertar código, cambiar el lengiaje a el lenguaje del código presentado. Como default, está Python. 
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%% INICIALIZACIÓN DE DOCUMENTO %%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+	\setcounter{page}{1} %La página en la que empieza el artículo
+	\fancyhead{}
+	\renewcommand{\headrulewidth}{2pt}% 2pt header rule
+	\renewcommand{\headrule}{\hbox to\headwidth{%
+			\color{NavyBlue}\leaders\hrule height \headrulewidth\hfill}}%color de la línea, BurntOrange para Matematico del #, NavyBlue para Axiomas Teoremas, Green para Aterrizando, Red para Activa, Goldenrod para Olimpica y RyalPurple para Horizonte http://en.wikibooks.org/wiki/LaTeX/Colors#The_68_standard_colors_known_to_dvips
+	\fancyhead[RE]{\textbf{laberintos e infinitos}}
+	\fancyhead[LO]{\textbf{Axiomas, teoremas y algo más}} %La sección a la que pertenece el artículo
+	%\thispagestyle{plain}
+	\fancyfoot{}
+	\fancyfoot[C]{2.6570415588986394897683205211695427040366888}
+	\fancyfoot[LE,RO]{\thepage}
+	\parindent=0in
+	\hspace{1pt}
+	\textbf{\Large La Distancia de Hamming}
+	\begin{flushright}
+		
+		Adrian Tame Jacobo \\
+		\textit{Estudiante de Maestría en el ITAM}
+		
+	\end{flushright}
+	
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SECCIONES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	
+	\section*{Introducción} 
+	\qquad La distancia de Hamming es una herramienta utilizada bastante en el ámbito de la teoría de la información. Es una distancia que definen una manera sencilla para comparar dos secuencias de bits binarias. En la practica, es usada para detección y corrección de errores cuando hay información transmitida entre computadoras. Recientemente, se ha usado también esta distancia en el aprendizaje de similitudes, una area de aprendizaje de máquina supervisada \cite{norouzi2012hamming}. Su nombre viene del científico Richard Hamming quien la definió originalmente en 1950 en  \cite{hamming1950error}. Mientras que esta distancia fue propuesta para usos prácticos cuando se creó, tiene propiedades interesantes cuando se estudia en el contexto de espacios métricos. 
+	
+	\section*{Conceptos de análisis funcional}
+	Para poder entender el contexto de la pregunta en la introducción, se requieren algunas definiciones importantes. Estos son los conceptos de de un espacio métrico y de una medida. Las siguientes definiciones son tomadas también de \cite{kreyszig1978introductory}. 
+	
+	\begin{definition}[Espacio Métrico, métrica] Un \textbf{espacio métrico} es un par $(X,d)$, donde $X$ es un conjunto y $d$ es una \textbf{métrica} en $X$ (una función de distancia en $X$), esto es, $d: X \times X \rightarrow \mathbb{R}$ tal que para todos $x,y \in X$ se cumplen las siguientes propiedades: 
+		\begin{enumerate}
+			\item $d$ es real valuada, finita y no-negativa. 
+			\item $d(x,y) = 0$ si y solo si $x=y$. 
+			\item La propiedad de simetría, esto es, $d(x,y)=d(y,x)$. 
+			\item La desigualdad del triangulo, esta es, $d(x,y) \leq d(x,z) + d(z,y)$. 
+		\end{enumerate}
+	\end{definition}
+
+Con esta definición, podemos seguir y definir el conjunto de bits binarias y la distancia de Hamming para poder tener un espacio métrico. 
+
+\section*{Conjuntos de bits y la distancia de Hamming}
+
+\begin{definition}
+	Sea $\mathbb{F}^n_2$ el conjunto de todas las secuencias de $n \in \mathbb{N}$ bits binarias, generalmente denotadas 0 y 1. Sean $u$ y $v \in \mathbb{F}^n_2$. Entonces, definimos la distancia de Hamming  $d(u,v)$ como el número de lugares en donde $u$ y $v$ difieren. 
+\end{definition}
+	
+Para darle claridad al concepto, se presenta un pequeño ejemplo. 
+\begin{example}
+	Sean $u = \{ 00100 \}$ y $v = \{ 01001 \} \in \mathbb{F}^5_2$. Usando la definición pasada, se sigue que $d(u,v) = 3$, ya que las secuencias de bits difieren en la segunda, tercera y quinta posición. 
+\end{example}
+
+El intentar demostrar que esta distancia es una métrica puede ser algo complicado ya que no esta definida como un objeto matemático en sí. Pero, después de analizarlo, se puede llegar a la conclusión de que existe una representación un poco mas formal de esta distancia,
+\begin{equation}
+	d(u,v) = \sum_{i=1}^n (u_i + v_i \mod 2).
+	\label{Hamming}
+\end{equation}
+El énfasis de este articulo cae bajo esta definición, ya que es equivalente a decir que $d(u,v) = \sum_{i=1}^n |u_i - v_i|$. Esto es en términos comunicacionales también equivalente a sumar el resultado de la operación XOR comparando $u_i$ y $v_i$ para cualquier $i$. 
+
+\section*{La desigualdad del triangulo para la distancia de Hamming}
+
+Mientras que las primeras tres propiedades de una métrica son relativamente fáciles de verificar, la desigualdad del triangulo no es trivial. Es aquí donde la equivalencia \ref{Hamming} es de utilidad. La demostración central se sigue a partir del siguiente lema. 
+
+\begin{lemma}
+		Sean $x_1,x_2,C \in \mathbb{N}$, entonces, 
+	\[ (x_1+x_2) \mod C = (x_1 \mod C) + (x_2 \mod C) \mod C. \]
+\end{lemma}
+\begin{proof}
+	Sean $x_1 \mod C = r_1$ y $x_2 \mod C = r_2$. Entonces, $C \, | \, (x_1 - r_1)$ y $C \, | \, (x_2 - r_2)$. Se sigue que $C \, | \, (x_1 + x_2) - (r_1 - r_2)$. Por lo tanto, 
+	\begin{align*}
+		& C \, | \, (x_1 + x_2) - (r_1 - r_2) \\
+		&\iff x_1 + x_2 \equiv r_1 + r_2 \mod C \\
+		&\iff (x_1 + x_2) \mod C = (r_1 + r_2) \mod C \\
+		&\iff (x_1 + x_2) \mod C = ((x_1 \mod C) + (x_2 \mod C)) \mod C.
+	\end{align*}
+%	Se sigue con el paso inductivo, esto es, tomamos 
+%	\[ \left(  \sum_{i=1}^{n-1} x_i \right) \mod C = \left(  \sum_{i=1}^{n-1} x_i \mod C \right) \mod C \]
+%	como hipótesis, y queremos demostrar que 
+%	\[ \left(  \sum_{i=1}^{n} x_i \right) \mod C = \left(  \sum_{i=1}^{n} x_i \mod C \right) \mod C. \]
+%	Comenzamos definiendo $a  := \sum_{i=1}^{n-1} x_i $ por claridad. Usando el caso base, podemos ver que 
+%	\begin{align*}
+%		& (a+x_n) \mod C = (a \mod C) + (x_n \mod C) \mod C \\
+%		&\iff \left(  \sum_{i=1}^{n-1} x_i \right) + x_n \mod C = \left(  \sum_{i=1}^{n-1} x_i \mod C \right) + (x_n \mod C) \mod C \\
+%		&\iff \left(  \sum_{i=1}^{n} x_i \right) \mod C = \left(  \sum_{i=1}^{n} x_i \mod C \right) \mod C
+%	\end{align*}
+%	Por el principio de inducción matemática se concluye que esta igualdad se cumple para todo $n \in \mathbb{N}$.
+\end{proof}
+
+Podemos ahora proceder al teorema central de este artículo. 
+
+\begin{theorem}
+	Sea $d$ la distancia de Hamming. Entonces, $(\mathbb{F}^n_2,d)$ es un espacio métrico. 
+\end{theorem}
+\begin{proof}
+	Las primeras tres propiedades son relativamente triviales y se pueden demostrar usando solamente la definición de $d$ y de el valor absoluto. Para la desigualdad del triangulo con $u,v,w \in \mathbb{F}^n_2$, queremos demostrar que 
+	\[ \sum_{i=1}^n \left( u_i + v_i \mod 2\right)  \leq \sum_{i=1}^n \left( u_i + w_i \mod 2\right)  + \sum_{i=1}^n \left( w_i + v_i \mod 2 \right). \]
+	Veamos que 
+	\begin{align*}
+		\sum_{i=1}^n \left( u_i + v_i \mod 2\right) &= \sum_{i=1}^n \left( u_i + (+w_i - w_i) + v_i \mod 2\right) \\
+		&\leq \sum_{i=1}^n \left( (u_i  + w_i) + (w_i + v_i) \mod 2\right), \quad \text{por Cauchy-Schwartz} \\
+		&= \sum_{i=1}^n \left( u_i  + w_i \mod 2 \right)  + \left( w_i + v_i \mod 2\right) \mod 2, \quad \text{por el lema,} \\
+		&= \sum_{i=1}^n \left( u_i  + w_i \mod 2 \right)  + \left( w_i + v_i \mod 2\right).
+	\end{align*}
+\end{proof}
+	
+\section*{Implementación computacional}
+
+Como notamos antes, esta distancia es equivalente a hacer el operador XOR entre dos diferentes listas de bits. Lo que sigue es una pequeña implementación de la distancia de Hamming en C. 
+
+\begin{lstlisting}[language=C]
+#include <stdint.h>
+#include <stdio.h>
+
+int hammingDistance (uint64_t x, uint64_t y) {
+	uint64_t res = x ^ y;
+	return __builtin_popcountll (res);
+}
+
+int main() {
+	printf("% d ",hammingDistance(1024,1023));
+	return 0;
+}
+\end{lstlisting}
+
+El resultado de correr este programa es 11, ya que hay 11 dígitos de diferencia entre 1024 (en binario, esto es $10000000000$) y 1023 (en binario, esto es $1111111111$). Esta es la implementación más rápida que hemos encontrado, ya que la función $\_\_builtin\_popcountll$ es una función extremadamente rápida. 
+
+
+	
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% REFERENCIAS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\bibliographystyle{unsrt}
+\bibliography{biblio.bib}
+	
+	
+	
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	
+\end{document}

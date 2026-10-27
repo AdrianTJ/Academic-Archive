@@ -1,0 +1,7 @@
+name: groups-and-leads-with-breaking
+description: The example release-notes agent groups changes and leads with breaking ones.
+prompt: Draft release notes for last week's merged PRs.
+expect:
+  - skill_loaded: summarize-changes
+  - connection_used: issue-tracker
+  - reply_not_contains: Merge branch
