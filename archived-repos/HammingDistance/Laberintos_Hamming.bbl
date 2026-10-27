@@ -1,0 +1,19 @@
+\begin{thebibliography}{1}
+
+\bibitem{norouzi2012hamming}
+Mohammad Norouzi, David~J Fleet, and Russ~R Salakhutdinov.
+\newblock Hamming distance metric learning.
+\newblock In {\em Advances in neural information processing systems}, pages
+  1061--1069, 2012.
+
+\bibitem{hamming1950error}
+Richard~W Hamming.
+\newblock Error detecting and error correcting codes.
+\newblock {\em The Bell system technical journal}, 29(2):147--160, 1950.
+
+\bibitem{kreyszig1978introductory}
+Erwin Kreyszig.
+\newblock {\em Introductory functional analysis with applications}, volume~1.
+\newblock wiley New York, 1978.
+
+\end{thebibliography}
