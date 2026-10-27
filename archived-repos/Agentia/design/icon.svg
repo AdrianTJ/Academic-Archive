@@ -1,0 +1,73 @@
+<!--
+  Agentia's app icon.
+
+  It draws the thing the app is for rather than an abstract mark: a page, with
+  one block marked by the same left rule the diff view uses. The palette is the
+  app's own — the manuscript theme's teal (#2f6272) as the ground, paper white,
+  ink grey, and a single warm accent (--diff-mod) on the changed block.
+
+  One accent colour on purpose. At 16pt in the Dock everything but the silhouette
+  and the one warm mark is lost, and that mark is what distinguishes it from every
+  other document icon.
+
+  Rendered by design/make-icon.sh into Sources/Agentia/Agentia.icns.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#3d7387"/>
+      <stop offset="1" stop-color="#23495a"/>
+    </linearGradient>
+
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f2f0ec"/>
+    </linearGradient>
+
+    <filter id="lift" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="14" stdDeviation="22" flood-color="#0d2530" flood-opacity="0.34"/>
+    </filter>
+  </defs>
+
+  <!--
+    Full bleed, and deliberately no rounded corners of our own.
+
+    macOS 26 masks every app icon into its own squircle and adds the Liquid
+    Glass edge treatment. Drawing a rounded rect inset at the old Big Sur
+    100/1024 margin meant the system masked an already-inset shape, so the
+    artwork ended up roughly half the width first-party icons use — checked by
+    rendering NSWorkspace.icon(forFile:) for this app beside Notes.app and
+    comparing. The ground now runs edge to edge and the system does the shaping.
+
+    Content stays inside the middle ~60% so the mask cannot clip it.
+  -->
+  <rect x="0" y="0" width="1024" height="1024" fill="url(#ground)"/>
+
+  <!--
+    The page fills most of the ground, and the lines are few and thick. An
+    earlier version used eight thin lines on a smaller page: fine at 512, mush
+    at the 32pt the Dock actually draws. Legibility at the small size decides
+    the composition.
+  -->
+  <g filter="url(#lift)">
+    <rect x="196" y="150" width="632" height="784" rx="34" ry="34" fill="url(#paper)"/>
+  </g>
+
+  <!-- Title: shorter and darker, the way a heading reads. -->
+  <rect x="262" y="242" width="304" height="42" rx="21" fill="#2b3038"/>
+
+  <!-- Body. -->
+  <rect x="262" y="344" width="500" height="28" rx="14" fill="#c9ced5"/>
+  <rect x="262" y="398" width="434" height="28" rx="14" fill="#c9ced5"/>
+
+  <!-- The changed block: the tint and left rule the diff view draws. -->
+  <rect x="226" y="472" width="536" height="176" rx="16" fill="#a8681f" fill-opacity="0.11"/>
+  <rect x="226" y="472" width="13" height="176" rx="6" fill="#a8681f"/>
+  <rect x="278" y="508" width="450" height="28" rx="14" fill="#bd8b46"/>
+  <rect x="278" y="562" width="362" height="28" rx="14" fill="#bd8b46"/>
+
+  <!-- Body resumes. -->
+  <rect x="262" y="696" width="500" height="28" rx="14" fill="#c9ced5"/>
+  <rect x="262" y="750" width="392" height="28" rx="14" fill="#c9ced5"/>
+  <rect x="262" y="804" width="470" height="28" rx="14" fill="#c9ced5"/>
+</svg>
