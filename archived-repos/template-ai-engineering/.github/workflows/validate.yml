@@ -1,0 +1,28 @@
+name: validate
+
+# Deploy gate for the canonical sources: every push and PR must pass the
+# reference checks and produce a clean build for all harnesses.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate canonical sources
+        run: bash bin/validate.sh
+
+      - name: Build every harness (copy mode, must be warning-free)
+        run: |
+          # --copy proves a shippable, symlink-free build. Any generator warning
+          # (e.g. a missing skill/connection reference) fails the job.
+          output="$(bash bin/generate.sh --copy --all 2>&1)"
+          echo "$output"
+          if echo "$output" | grep -qi 'warning:'; then
+            echo "::error::generator emitted warnings — see log above"
+            exit 1
+          fi
